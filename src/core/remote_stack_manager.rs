@@ -183,7 +183,7 @@ impl RemoteStackManager {
         println!("  ⬇️ Checking out stack: {}", stack_name);
         
         // Use sparse checkout to get only the specific stack
-        self.git_sparse_checkout_stack(stack_name).await
+        self.git_clone_stack(stack_name).await
             .with_context(|| format!("Failed to checkout stack: {}", stack_name))?;
 
         Ok(stack_path)
