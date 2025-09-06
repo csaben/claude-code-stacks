@@ -160,12 +160,14 @@ impl RemoteStackManager {
             return Ok(stack_path);
         }
         
-        // For existing stacks like ts-lint-stack, use the specific repository
-        let repo_url = if stack_name == "ts-lint-stack" {
-            "git@github.com:csaben/ts-lint-stack.git".to_string()
-        } else {
-            // For other stacks, assume they're in separate repositories following the pattern
-            format!("git@github.com:{}/{}.git", self.repository.owner, stack_name)
+        // Map stack names to their specific repositories
+        let repo_url = match stack_name {
+            "ts-lint-stack" => "git@github.com:csaben/ts-lint-stack.git".to_string(),
+            "stackstack" => "git@github.com:csaben/stackstack.git".to_string(),
+            _ => {
+                // For other stacks, assume they're in separate repositories following the pattern
+                format!("git@github.com:{}/{}.git", self.repository.owner, stack_name)
+            }
         };
         
         println!("  📥 Adding {} as subtree from {}", stack_name, repo_url);

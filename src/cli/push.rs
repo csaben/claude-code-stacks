@@ -118,10 +118,10 @@ async fn push_single_stack(stack_name: String, message: Option<String>) -> Resul
     }
     
     // For subtrees, determine the repository URL based on stack name
-    let repo_url = if stack_name == "ts-lint-stack" {
-        "git@github.com:csaben/ts-lint-stack.git".to_string()
-    } else {
-        format!("git@github.com:csaben/{}.git", stack_name)
+    let repo_url = match stack_name.as_str() {
+        "ts-lint-stack" => "git@github.com:csaben/ts-lint-stack.git".to_string(),
+        "stackstack" => "git@github.com:csaben/stackstack.git".to_string(),
+        _ => format!("git@github.com:csaben/{}.git", stack_name)
     };
     println!("  📋 Target: {}", repo_url);
     

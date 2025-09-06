@@ -1,0 +1,12 @@
+{
+  "mcp": {
+    "servers": {}
+  },
+  "features": {
+    "cline_mode": true,
+    "auto_summarize_chat": true
+  },
+  "ui": {
+    "font_size": 14
+  }
+}
