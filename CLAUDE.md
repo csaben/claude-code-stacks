@@ -31,3 +31,11 @@ stacks: linting, example-generation, clark-idiomatic-styling(maybe just CLAUDE.m
 i really enjoy the idea that this could be setup in a way that im like
 
 open terminal navigate to workspace folder or open tmux run this workflow and the claude code setup spin up tmux panes per stack me go into the tmux session and be able to view the workers and approve as needed
+
+
+
+## Style
+- no emojis
+- use bun for typscript
+- use uv for python (uv python subagent)
+- commit messages should exclude "🤖 Generated with [Claude Code](https://claude.ai/code)Co-Authored-By: Claude <noreply@anthropic.com>"
