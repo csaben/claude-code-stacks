@@ -158,20 +158,28 @@ async fn execute_worktree_creation(config: &WorktreeConfig) -> Result<()> {
     // Create the branch if needed
     let branch_name = match &config.branch_strategy {
         BranchStrategy::NewFromCurrent => {
-            let branch_name = format!("feature-{}", config.task_name);
-            println!("🌱 Creating branch {} from current branch...", branch_name);
+            let target_branch_name = format!("feature-{}", config.task_name);
+            let current_branch = get_current_branch()?;
             
-            let output = Command::new("git")
-                .args(&["checkout", "-b", &branch_name])
-                .output()
-                .context("Failed to create new branch")?;
+            // Check if we're already on the target branch
+            if current_branch == target_branch_name {
+                println!("📍 Already on target branch {}, using it for worktree...", target_branch_name);
+                target_branch_name
+            } else {
+                println!("🌱 Creating branch {} from current branch...", target_branch_name);
+                
+                let output = Command::new("git")
+                    .args(&["checkout", "-b", &target_branch_name])
+                    .output()
+                    .context("Failed to create new branch")?;
 
-            if !output.status.success() {
-                let error = String::from_utf8_lossy(&output.stderr);
-                anyhow::bail!("Failed to create branch: {}", error);
+                if !output.status.success() {
+                    let error = String::from_utf8_lossy(&output.stderr);
+                    anyhow::bail!("Failed to create branch: {}", error);
+                }
+
+                target_branch_name
             }
-
-            branch_name
         }
         BranchStrategy::NewFromMain => {
             let branch_name = format!("feature-{}", config.task_name);

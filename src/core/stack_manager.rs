@@ -104,33 +104,3 @@ pub async fn discover_stacks() -> Result<Vec<Stack>> {
     Ok(stacks)
 }
 
-/// Format stacks for display in fzf
-pub fn format_stacks_for_fzf(stacks: &[Stack]) -> String {
-    stacks
-        .iter()
-        .map(|stack| {
-            if let Some(ref desc) = stack.description {
-                format!("{} - {}", stack.name, desc)
-            } else {
-                stack.name.clone()
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-/// Parse fzf output back to stack names
-pub fn parse_fzf_selection(fzf_output: &str) -> Vec<String> {
-    fzf_output
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .map(|line| {
-            // Extract stack name (everything before first " - " if present)
-            if let Some(pos) = line.find(" - ") {
-                line[..pos].trim().to_string()
-            } else {
-                line.trim().to_string()
-            }
-        })
-        .collect()
-}

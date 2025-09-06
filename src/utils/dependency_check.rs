@@ -6,7 +6,6 @@ pub fn check_dependencies() -> Result<()> {
     let deps = vec![
         ("tmux", "tmux is required for worktree management"),
         ("claude", "claude CLI is required for MCP operations"), 
-        ("fzf", "fzf is required for interactive stack selection"),
         ("git", "git is required for worktree operations"),
     ];
 
@@ -32,16 +31,3 @@ pub fn check_command_exists(command: &str) -> Result<()> {
     Ok(())
 }
 
-/// Check if fzf is available and working
-pub fn check_fzf_available() -> Result<()> {
-    let output = Command::new("fzf")
-        .arg("--version")
-        .output()
-        .with_context(|| "Failed to execute fzf --version")?;
-
-    if !output.status.success() {
-        anyhow::bail!("fzf is not working properly");
-    }
-
-    Ok(())
-}

@@ -20,7 +20,11 @@ struct Cli {
 enum Commands {
     /// Check out one or more stacks for use in the current project
     #[command(name = "checkout")]
-    Checkout,
+    Checkout {
+        /// GitHub URL or stack name to checkout directly
+        #[arg(value_name = "STACK_URL_OR_NAME")]
+        stack: Option<String>,
+    },
     /// Manage git worktrees with tmux integration
     Worktree,
     /// Sync MCP server configurations from docker-compose and other sources
@@ -32,7 +36,9 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Some(Commands::Checkout) => checkout::run().await,
+        Some(Commands::Checkout { stack }) => {
+            checkout::run_with_stack(stack).await
+        }
         Some(Commands::Worktree) => worktree::run().await,
         Some(Commands::Sync) => sync::run().await,
         None => {

@@ -1,0 +1,1 @@
+/home/arelius/.cache/claude-stacks/stack-2/.claude/agents/testing-specialist.md

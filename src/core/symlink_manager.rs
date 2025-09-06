@@ -102,13 +102,36 @@ impl SymlinkManager {
             }
         }
 
-        // Create the symlink
-        let absolute_source = fs::canonicalize(source)
-            .with_context(|| format!("Failed to canonicalize source path {}", source.display()))?;
+        // Create the symlink with proper relative path from target directory
+        let target_dir = prefixed_target.parent()
+            .context("Failed to get target directory")?;
+        
+        // Calculate relative path from target directory to source file
+        let relative_source = if source.is_absolute() {
+            // Make source path relative to current directory first
+            let current_dir = std::env::current_dir()
+                .context("Failed to get current directory")?;
+            let source_relative_to_cwd = source.strip_prefix(&current_dir)
+                .unwrap_or(source);
             
-        unix_fs::symlink(&absolute_source, &prefixed_target)
+            // Now calculate path from target directory back to current directory, then to source
+            let mut relative_path = PathBuf::new();
+            let target_depth = target_dir.components().count();
+            
+            // Add "../" for each level up from target directory to current directory
+            for _ in 0..target_depth {
+                relative_path.push("..");
+            }
+            
+            // Add the source path relative to current directory
+            relative_path.join(source_relative_to_cwd)
+        } else {
+            source.to_path_buf()
+        };
+            
+        unix_fs::symlink(&relative_source, &prefixed_target)
             .with_context(|| format!("Failed to create symlink from {} to {}", 
-                absolute_source.display(), prefixed_target.display()))?;
+                relative_source.display(), prefixed_target.display()))?;
 
         println!("  📎 Created symlink: {}", prefixed_target.display());
         Ok(())

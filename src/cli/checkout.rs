@@ -1,29 +1,69 @@
-use std::process::{Command, Stdio};
-use std::io::Write;
 use anyhow::{Result, Context};
 use dialoguer::Confirm;
+use skim::prelude::*;
+use std::io::Cursor;
 
-use crate::core::stack_manager::{discover_stacks, format_stacks_for_fzf, parse_fzf_selection};
+use crate::core::stack_manager::Stack;
+use crate::core::remote_stack_manager::{RemoteStackManager, discover_local_stacks};
 use crate::core::symlink_manager::SymlinkManager;
 use crate::core::settings_merger::SettingsMerger;
 use crate::core::mcp_validator::McpValidator;
 use crate::utils::claude_md_updater::ClaudeMdUpdater;
-use crate::utils::dependency_check::{check_dependencies, check_fzf_available};
+use crate::utils::dependency_check::check_dependencies;
 
 pub async fn run() -> Result<()> {
+    run_with_stack(None).await
+}
+
+pub async fn run_with_stack(direct_stack: Option<String>) -> Result<()> {
+    use is_terminal::IsTerminal;
+    
     println!("🔍 Checking dependencies...");
     check_dependencies().context("Dependency check failed")?;
     
     println!("📦 Discovering available stacks...");
-    let stacks = discover_stacks().await.context("Failed to discover stacks")?;
+    
+    // Try remote stacks first, fall back to local if needed
+    let stacks = match RemoteStackManager::new() {
+        Ok(remote_manager) => {
+            match remote_manager.discover_remote_stacks().await {
+                Ok(remote_stacks) => {
+                    println!("  🌐 Found {} remote stack(s) from GitHub", remote_stacks.len());
+                    remote_stacks
+                }
+                Err(_) => {
+                    println!("  🔄 Remote stacks unavailable, checking for local stacks...");
+                    discover_local_stacks().await.context("Failed to discover local stacks")?
+                }
+            }
+        }
+        Err(_) => {
+            println!("  📁 Using local stacks directory...");
+            discover_local_stacks().await.context("Failed to discover local stacks")?
+        }
+    };
     
     if stacks.is_empty() {
         println!("No stacks found in the stacks/ directory.");
         return Ok(());
     }
 
-    println!("🎯 Select stacks to checkout (use Tab for multi-select):");
-    let selected_stacks = select_stacks_with_fzf(&stacks).await?;
+    let selected_stacks = if let Some(direct_stack_name) = direct_stack {
+        // Direct stack specified - validate it exists
+        if stacks.iter().any(|s| s.name == direct_stack_name) {
+            println!("🎯 Direct checkout: {}", direct_stack_name);
+            vec![direct_stack_name]
+        } else {
+            println!("❌ Stack '{}' not found. Available stacks:", direct_stack_name);
+            for stack in &stacks {
+                println!("  • {} - {}", stack.name, stack.description.as_ref().unwrap_or(&"No description".to_string()));
+            }
+            return Ok(());
+        }
+    } else {
+        println!("🎯 Select stacks to checkout (use Tab for multi-select):");
+        select_stacks_with_skim(&stacks).await?
+    };
     
     if selected_stacks.is_empty() {
         println!("No stacks selected.");
@@ -42,36 +82,64 @@ pub async fn run() -> Result<()> {
         println!("  • {} - {}", stack.name, stack.description.as_ref().unwrap_or(&"No description".to_string()));
     }
 
-    let should_proceed = Confirm::new()
-        .with_prompt("Proceed with checkout?")
-        .default(true)
-        .interact()?;
+    let should_proceed = if std::io::stdin().is_terminal() {
+        Confirm::new()
+            .with_prompt("Proceed with checkout?")
+            .default(true)
+            .interact()?
+    } else {
+        println!("Auto-proceeding with checkout in non-interactive mode...");
+        true
+    };
 
     if !should_proceed {
         println!("Checkout cancelled.");
         return Ok(());
     }
 
+    // Initialize remote manager for downloading
+    let remote_manager = RemoteStackManager::new().ok();
+
     // Process each selected stack
     for stack in selected_stack_objects {
         println!("\n🔧 Processing stack: {}", stack.name);
         
+        // Ensure stack is cached locally if it's a remote stack
+        let stack_path = if let Some(ref manager) = remote_manager {
+            // Check if this is a remote stack (not already local)
+            if !stack.claude_dir.exists() {
+                manager.cache_stack(&stack.name).await
+                    .with_context(|| format!("Failed to download stack {}", stack.name))?
+            } else {
+                stack.path.clone()
+            }
+        } else {
+            stack.path.clone()
+        };
+
+        // Update stack with the correct path
+        let cached_stack = if stack_path != stack.path {
+            crate::core::stack_manager::Stack::new(stack.name.clone(), stack_path)
+        } else {
+            stack.clone()
+        };
+
         // Create symlinks for .claude files
         let symlink_manager = SymlinkManager::new();
-        symlink_manager.create_symlinks_for_stack(stack).await
-            .with_context(|| format!("Failed to create symlinks for stack {}", stack.name))?;
+        symlink_manager.create_symlinks_for_stack(&cached_stack).await
+            .with_context(|| format!("Failed to create symlinks for stack {}", cached_stack.name))?;
 
         // Merge settings
         let settings_merger = SettingsMerger::new();
-        settings_merger.merge_stack_settings(stack).await
-            .with_context(|| format!("Failed to merge settings for stack {}", stack.name))?;
+        settings_merger.merge_stack_settings(&cached_stack).await
+            .with_context(|| format!("Failed to merge settings for stack {}", cached_stack.name))?;
 
         // Update CLAUDE.md
         let md_updater = ClaudeMdUpdater::new();
-        md_updater.add_stack_import(&stack.name).await
-            .with_context(|| format!("Failed to update CLAUDE.md for stack {}", stack.name))?;
+        md_updater.add_stack_import(&cached_stack.name).await
+            .with_context(|| format!("Failed to update CLAUDE.md for stack {}", cached_stack.name))?;
 
-        println!("  ✅ Stack {} checkout complete", stack.name);
+        println!("  ✅ Stack {} checkout complete", cached_stack.name);
     }
 
     // Check for missing MCP servers
@@ -99,43 +167,69 @@ pub async fn run() -> Result<()> {
     Ok(())
 }
 
-async fn select_stacks_with_fzf(stacks: &[crate::core::stack_manager::Stack]) -> Result<Vec<String>> {
-    check_fzf_available()?;
+async fn select_stacks_with_skim(stacks: &[Stack]) -> Result<Vec<String>> {
+    use is_terminal::IsTerminal;
     
-    let formatted_stacks = format_stacks_for_fzf(stacks);
-    
-    let mut fzf = Command::new("fzf")
-        .args(&[
-            "--multi",
-            "--prompt=Select stacks: ",
-            "--preview=echo 'Stack: {}' | cut -d' ' -f1 | xargs -I{} find stacks/{} -name '*.md' | head -5 | xargs cat 2>/dev/null || echo 'No preview available'",
-            "--preview-window=right:50%:wrap",
-            "--height=80%",
-        ])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("Failed to spawn fzf process")?;
-
-    if let Some(stdin) = fzf.stdin.as_mut() {
-        stdin.write_all(formatted_stacks.as_bytes())
-            .context("Failed to write to fzf stdin")?;
-    }
-
-    let output = fzf.wait_with_output()
-        .context("Failed to wait for fzf process")?;
-
-    if !output.status.success() {
-        if output.status.code() == Some(130) {
-            // User cancelled with Ctrl+C
-            return Ok(Vec::new());
+    // Check if we're in an interactive terminal
+    if !std::io::stdin().is_terminal() || std::env::var("TERM").is_err() {
+        println!("Non-interactive environment detected. Available stacks:");
+        for (i, stack) in stacks.iter().enumerate() {
+            println!("  {}. {} - {}", 
+                i + 1, 
+                stack.name, 
+                stack.description.as_ref().unwrap_or(&"No description".to_string())
+            );
         }
-        anyhow::bail!("fzf failed with status: {}", output.status);
+        
+        // For non-interactive, return all stacks
+        println!("Selecting all available stacks for non-interactive mode.");
+        return Ok(stacks.iter().map(|s| s.name.clone()).collect());
     }
+    
+    // Format stacks for display
+    let formatted_items: Vec<String> = stacks
+        .iter()
+        .map(|stack| {
+            if let Some(ref desc) = stack.description {
+                format!("{} - {}", stack.name, desc)
+            } else {
+                stack.name.clone()
+            }
+        })
+        .collect();
+    
+    let input = formatted_items.join("\n");
+    
+    let options = SkimOptionsBuilder::default()
+        .height(Some("80%"))
+        .multi(true)
+        .prompt(Some("Select stacks: "))
+        .build()
+        .map_err(|e| anyhow::anyhow!("Failed to build skim options: {}", e))?;
 
-    let fzf_output = String::from_utf8(output.stdout)
-        .context("Invalid UTF-8 output from fzf")?;
-
-    Ok(parse_fzf_selection(&fzf_output))
+    let item_reader = SkimItemReader::default();
+    let items = item_reader.of_bufread(Cursor::new(input));
+    
+    let selected_items = Skim::run_with(&options, Some(items))
+        .ok_or_else(|| anyhow::anyhow!("Skim selection was cancelled"))?;
+    
+    if selected_items.is_abort {
+        return Ok(Vec::new());
+    }
+    
+    let selected_stacks: Vec<String> = selected_items
+        .selected_items
+        .iter()
+        .map(|item| {
+            let text = item.text();
+            // Extract stack name (everything before first " - " if present)
+            if let Some(pos) = text.find(" - ") {
+                text[..pos].trim().to_string()
+            } else {
+                text.trim().to_string()
+            }
+        })
+        .collect();
+    
+    Ok(selected_stacks)
 }

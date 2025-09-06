@@ -1,0 +1,76 @@
+{
+  "claude_code_settings": {
+    "agents": [
+      {
+        "description": "Specialized agent for code linting and style enforcement",
+        "name": "linting-specialist",
+        "permissions": {
+          "bash_commands": [
+            "npm run lint*",
+            "eslint*",
+            "prettier*",
+            "ruff*",
+            "black*",
+            "isort*",
+            "cargo clippy*",
+            "cargo fmt*",
+            "golangci-lint*",
+            "gofmt*"
+          ],
+          "file_operations": [
+            "read",
+            "write",
+            "edit"
+          ],
+          "git_operations": [
+            "add",
+            "commit",
+            "status",
+            "diff"
+          ]
+        }
+      },
+      {
+        "description": "Specialized agent for infrastructure and example testing",
+        "name": "testing-specialist",
+        "permissions": {
+          "bash_commands": [
+            "docker*",
+            "docker-compose*",
+            "hadolint*",
+            "nginx -t*",
+            "./test-*.sh*",
+            "find*",
+            "curl*",
+            "wget*"
+          ],
+          "file_operations": [
+            "read",
+            "write",
+            "edit"
+          ],
+          "network_access": true
+        }
+      }
+    ],
+    "auto_approve": [
+      "npm run lint",
+      "npm run lint:fix",
+      "ruff check",
+      "ruff format",
+      "cargo clippy",
+      "cargo fmt",
+      "docker-compose config",
+      "docker build --dry-run",
+      "hadolint",
+      "nginx -t",
+      "./test-docker.sh",
+      "./test-nginx.sh",
+      "./test-examples.sh"
+    ],
+    "auto_fix_on_save": false,
+    "lint_on_save": true,
+    "test_on_change": true,
+    "working_directory": "."
+  }
+}
