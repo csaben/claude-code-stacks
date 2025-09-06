@@ -38,10 +38,6 @@ jobs:
             target: aarch64-apple-darwin
             binary_name: stacks-macos-aarch64
             cross: false
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            binary_name: stacks-windows-x86_64.exe
-            cross: false
 
     steps:
       - name: Checkout code
@@ -75,25 +71,15 @@ jobs:
             cargo build --release --target ${{ matrix.target }}
           fi
 
-      - name: Prepare binary (Unix)
-        if: runner.os != 'Windows'
+      - name: Prepare binary
         run: |
           cp target/${{ matrix.target }}/release/stacks ${{ matrix.binary_name }}
           strip ${{ matrix.binary_name }} || true
           chmod +x ${{ matrix.binary_name }}
 
-      - name: Prepare binary (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          cp target/${{ matrix.target }}/release/stacks.exe ${{ matrix.binary_name }}
-
       - name: Generate checksum
         run: |
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            certutil -hashfile ${{ matrix.binary_name }} SHA256 > ${{ matrix.binary_name }}.sha256
-          else
-            sha256sum ${{ matrix.binary_name }} > ${{ matrix.binary_name }}.sha256
-          fi
+          sha256sum ${{ matrix.binary_name }} > ${{ matrix.binary_name }}.sha256
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
