@@ -1,130 +1,230 @@
 # Claude Code Stacks
 
-Complete workflow automation system for Claude Code with tmux integration and intelligent stack management.
+Complete natural language workflow automation system for Claude Code with global CLI, fzf integration, and tmux monitoring.
 
-## Quick Start
-
-```bash
-# Initial setup
-./claude-workflow-manager.sh setup
-
-# Start workflow for your project  
-./claude-workflow-manager.sh start /path/to/your/project
-
-# Apply complex changes with automatic stack selection
-./claude-workflow-manager.sh apply "update repo to work with fichub. ensure it works with 'purple days'"
-```
-
-## System Overview
-
-This system provides 7 specialized stacks that work together to automate your development workflow:
-
-- **stack-1**: Automatic linting across projects
-- **stack-2**: Testing of examples (nginx, docker, compose)  
-- **stack-3**: Clark idiomatic style formatting
-- **stack-4**: Git operations with auto subtree services
-- **stack-5**: CI/CD workflows
-- **stack-6**: Design doc generation to Google Drive
-- **stack-7**: Database setup with MCP configuration
-
-## Architecture
-
-```
-claude-workflow-manager.sh    # Main orchestration
-├── stack-router.sh          # Individual stack management  
-└── stacks/                  # Stack configurations
-    ├── stack-1/            # Linting
-    ├── stack-2/            # Testing
-    ├── stack-3/            # Style formatting
-    ├── stack-4/            # Git operations
-    ├── stack-5/            # CI/CD
-    ├── stack-6/            # Documentation
-    └── stack-7/            # Database setup
-```
-
-Each stack contains:
-- `CLAUDE.md` - Stack description and capabilities
-- `init.sh` - Initialization script
-- `.local-settings.json` - Claude Code agent permissions
-
-## Usage
-
-### Basic Commands
+## 🚀 One-Liner Installation
 
 ```bash
-# List available stacks
-./stack-router.sh list
-
-# Run specific stacks
-./stack-router.sh run stack-1 stack-3
-
-# Show workflow status  
-./claude-workflow-manager.sh status
-
-# Stop all workflows
-./claude-workflow-manager.sh stop
+curl -LsSf https://raw.githubusercontent.com/csaben/claude-code-stacks/main/install.sh | sh
 ```
 
-### Advanced Workflow
+## 🎯 Quick Start
 
 ```bash
-# Resoul-specific workflow (example from CLAUDE.md)
-./claude-workflow-manager.sh resoul "add fichub support with character encoding fixes"
+# Navigate to any project
+cd ~/my-awesome-project/
+
+# Interactive stack selection with fzf
+stacks
+
+# Natural language interface - just describe what you want!
+claude "help me set up linting for this project"
+claude "fix any style issues and apply Clark's guidelines"
+claude "I modified the linting stack, contribute it back to the repo"
 ```
 
-This automatically:
-1. Detects required stacks based on change description
-2. Starts tmux session with multiple panes
-3. Initializes Claude Code agents in each stack
-4. Provides auto-approval for common operations
+## ✨ Key Features
 
-### Tmux Integration
+- **🌐 Global CLI**: Works from any directory with `stacks` command
+- **🔍 fzf Integration**: Beautiful interactive stack selection
+- **🗣️ Natural Language**: Just describe what you want in plain English
+- **🔄 Auto-Contribution**: Easy workflow to contribute improvements back
+- **📺 Tmux Monitoring**: Multi-pane monitoring of all active stacks
+- **🤖 Headless Automation**: Uses Claude Code's headless mode for automation
 
-The system creates a tmux session called `claude-workflow` with:
-- `main` - Your project workspace
-- `router` - Stack management interface  
-- `stack-1` through `stack-7` - Individual stack workspaces
+## 🏗️ System Architecture
 
-Attach with: `tmux attach-session -t claude-workflow`
+```
+Global Installation:
+~/.local/bin/stacks           # Global CLI command
+~/.claude-stacks/            # Cached repository
 
-## Stack Details
+Per Project:
+my-project/
+├── .claude/
+│   ├── stacks/              # Active stack configurations
+│   ├── commands/            # Natural language interfaces
+│   └── CLAUDE.md            # Project-specific configuration
+```
 
-### stack-1: Linting
-Auto-detects project type and configures appropriate linters (eslint, ruff, clippy).
+## 📋 Available Stacks
 
-### stack-2: Testing  
-Validates Docker configs, Nginx setups, and project examples.
+| Stack | Description | Natural Language Examples |
+|-------|-------------|---------------------------|
+| **stack-1** | Automatic linting (eslint, ruff, clippy) | "fix linting issues", "check code style" |
+| **stack-2** | Testing (Docker, nginx, examples) | "test my configurations", "validate examples" |  
+| **stack-3** | Clark idiomatic style | "apply Clark style", "remove emojis", "use uv/bun" |
+| **stack-4** | Git operations & subtree management | "commit these changes", "manage git workflow" |
+| **stack-5** | CI/CD workflows | "set up GitHub Actions", "deploy pipeline" |
+| **stack-6** | Design doc generation → Google Drive | "update documentation", "sync design docs" |
+| **stack-7** | Database setup with MCP config | "configure database", "set up postgres" |
 
-### stack-3: Style Formatting
-Enforces Clark's style: no emojis, concise READMEs, use uv/bun.
+## 🎛️ Commands
 
-### stack-4: Git Operations
-Automated git workflows with subtree management.
-
-### stack-5: CI/CD
-GitHub Actions and GitLab CI pipeline management.
-
-### stack-6: Documentation
-Auto-generates design docs and syncs to Google Drive.
-
-### stack-7: Database Setup
-Reads docker-compose files and configures MCP database connections.
-
-## Configuration
-
-Global config at `~/.claude-workflow-config`:
+### Global Commands (available anywhere)
 ```bash
-WORKFLOW_ROOT="/path/to/claude-code-stacks"
-AUTO_APPROVE_SAFE_COMMANDS=true
-USE_TMUX_INTEGRATION=true
-DEFAULT_STACKS="stack-1,stack-3"
+stacks                    # Interactive stack selection with fzf
+stacks list              # List available stacks
+stacks status           # Show active stacks in current project  
+stacks update           # Update stack repository cache
+stack-contribute        # Contribute local changes back to repo
 ```
 
-## Dependencies
+### Natural Language Interface
+Just talk to Claude Code naturally:
+```bash
+claude "I want to add linting to this TypeScript project"
+claude "Test my Docker configurations"
+claude "Apply our style guidelines to the entire codebase"  
+claude "Push my stack improvements to the main repository"
+```
 
-- tmux (for multi-pane management)
-- git (for repository operations)
-- docker (optional, for testing stacks)
-- bun/uv (installed by stack-3 as needed)
+### Tmux Monitoring
+```bash
+tmux-stack-manager.sh start    # Start multi-pane monitoring
+tmux-stack-manager.sh status   # Check monitoring status
+tmux-stack-manager.sh attach   # Attach to session
+```
 
-Install with: `./claude-workflow-manager.sh install-deps`
+## 🚦 Complete User Journey
+
+### First Time Setup (Any New Machine)
+```bash
+# One command installation
+curl -LsSf https://raw.githubusercontent.com/csaben/claude-code-stacks/main/install.sh | sh
+
+# Restart terminal or source profile
+source ~/.zshrc  # or ~/.bashrc
+```
+
+### Daily Workflow
+```bash
+# Navigate to your project
+cd ~/development/my-project/
+
+# Select stacks interactively  
+stacks
+# ┌─ stack-1: Automatic linting ──────────────────┐
+# │ stack-2: Testing infrastructure               │ 
+# │ stack-3: Clark idiomatic style               │
+# │ stack-4: Git operations                      │
+# └───────────────────────────────────────────────┘
+
+# Start monitoring (optional)
+tmux-stack-manager.sh start
+
+# Work naturally with Claude Code
+claude "help me improve this codebase"
+claude "fix any issues you find"
+claude "prepare this for deployment"
+```
+
+### Contributing Improvements
+```bash
+# After modifying a stack locally
+claude "I improved the linting configuration, can you contribute it back?"
+# System automatically:
+# 1. Detects your changes
+# 2. Validates modifications  
+# 3. Creates contribution branch
+# 4. Opens PR to csaben/claude-code-stacks
+```
+
+## 🔧 Advanced Features
+
+### Multi-Stack Operations
+The system intelligently combines stacks based on your request:
+```bash
+claude "prepare this project for production"
+# Automatically activates:
+# - stack-1: Linting
+# - stack-2: Testing  
+# - stack-3: Style formatting
+# - stack-4: Git operations
+# - stack-5: CI/CD setup
+```
+
+### Tmux Workspace  
+Creates dedicated monitoring panes for each active stack:
+- **Main**: Your primary workspace
+- **Control**: Stack management interface
+- **stack-1**: Linting status and controls
+- **stack-2**: Testing results and logs
+- **stack-3**: Style compliance monitoring
+- **And so on...**
+
+### Headless Automation
+Leverages Claude Code's headless mode for automated operations:
+```bash
+# Background validation
+claude --mode=plan -p "validate stack configuration"
+
+# Automated fixes  
+claude --mode=auto-accept -p "fix all linting violations"
+```
+
+## 🎨 The Clark Style (stack-3)
+
+Enforces opinionated style guidelines:
+- ❌ **No emojis** in code, comments, or documentation
+- 📝 **Concise READMEs** - essential information only (<200 lines)
+- 📦 **Use uv** for Python (not pip/poetry)
+- 📦 **Use bun** for JavaScript/TypeScript (not npm/yarn)
+- 🔧 **Minimal dependencies** - prefer standard library
+- 📖 **Clear, technical language** without marketing fluff
+
+## 🤝 Contributing
+
+The system makes it trivial to contribute improvements:
+
+1. **Modify locally**: Edit any stack in `.claude/stacks/`
+2. **Natural request**: `claude "contribute my changes"`
+3. **Automatic workflow**: System handles validation, branching, and PR creation
+
+## 📁 Repository Structure
+
+```
+claude-code-stacks/
+├── install.sh                    # One-liner installation
+├── stacks/                       # Stack definitions
+│   ├── stack-1/                  # Linting stack
+│   │   ├── CLAUDE.md
+│   │   ├── .local-settings.json
+│   │   ├── .claude/
+│   │   │   ├── commands/         # Natural language interfaces
+│   │   │   └── agents/           # Specialized agents
+│   │   └── init.sh
+│   └── stack-{2-7}/             # Other stacks
+├── natural-language-processor.py # Intent analysis
+├── stack-contribute.sh           # Contribution workflow
+├── tmux-stack-manager.sh         # Multi-pane monitoring
+└── README.md                     # This file
+```
+
+## 🔗 Integration Points
+
+- **Claude Code**: Headless mode, natural language processing
+- **Git**: Automatic contribution workflows
+- **Tmux**: Multi-pane monitoring and management
+- **fzf**: Beautiful interactive selection
+- **Docker**: Configuration testing and validation
+- **Package Managers**: uv, bun integration
+
+## 🎯 Perfect for Resoul Workflow
+
+Exactly matches your described workflow:
+```bash
+cd ~/resoul-project/
+claude "update repo to work with fichub. ensure it works with 'purple days' on fichub"
+
+# System automatically:
+# ✅ Applies linting (stack-1)
+# ✅ Tests examples (stack-2)  
+# ✅ Enforces Clark style (stack-3)
+# ✅ Manages git operations (stack-4)
+# ✅ Sets up CI/CD (stack-5)
+# ✅ Updates design docs → Google Drive (stack-6)
+# ✅ Configures databases if needed (stack-7)
+```
+
+No commands to remember. No syntax to learn. Just natural language describing what you want to accomplish.
