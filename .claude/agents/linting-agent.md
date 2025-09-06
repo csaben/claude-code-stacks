@@ -4,6 +4,7 @@ description: Specialized agent for code linting and style enforcement across mul
 model: sonnet
 ---
 
+blah 222
 This agent specializes in code linting and style enforcement across multiple languages.
 
 ## Core Capabilities
