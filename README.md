@@ -32,19 +32,25 @@ claude "I modified the linting stack, contribute it back to the repo"
 - **📺 Tmux Monitoring**: Multi-pane monitoring of all active stacks
 - **🤖 Headless Automation**: Uses Claude Code's headless mode for automation
 
-## 🏗️ System Architecture
+## System Architecture
 
 ```
 Global Installation:
 ~/.local/bin/stacks           # Global CLI command
 ~/.claude-stacks/            # Cached repository
 
-Per Project:
+Per Project (Git-based):
 my-project/
-├── .claude/
-│   ├── stacks/              # Active stack configurations
-│   ├── commands/            # Natural language interfaces
-│   └── CLAUDE.md            # Project-specific configuration
+├── stack-1/                 # git checkout of linting stack
+│   ├── .claude/
+│   ├── CLAUDE.md
+│   └── init.sh
+├── stack-3/                 # git checkout of style stack
+│   ├── .claude/
+│   ├── CLAUDE.md
+│   └── init.sh
+├── src/
+└── package.json
 ```
 
 ## 📋 Available Stacks
@@ -173,13 +179,14 @@ Enforces opinionated style guidelines:
 - 🔧 **Minimal dependencies** - prefer standard library
 - 📖 **Clear, technical language** without marketing fluff
 
-## 🤝 Contributing
+## Contributing
 
-The system makes it trivial to contribute improvements:
+The git-based approach makes contributing improvements simple:
 
-1. **Modify locally**: Edit any stack in `.claude/stacks/`
-2. **Natural request**: `claude "contribute my changes"`
-3. **Automatic workflow**: System handles validation, branching, and PR creation
+1. **Modify locally**: Edit files directly in checked-out stack directories (e.g., `stack-1/`)
+2. **Commit changes**: `cd stack-1 && git add . && git commit -m "improve linting config"`
+3. **Push upstream**: `git push origin main` (or create feature branch)
+4. **Natural request**: `stacks contribute` shows which stacks have modifications
 
 ## 📁 Repository Structure
 
