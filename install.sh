@@ -2,6 +2,7 @@
 
 # Claude Code Stacks CLI Installer
 # One-liner installation: curl -sSL https://raw.githubusercontent.com/csaben/claude-code-stacks/main/install.sh | bash
+# Version: 1.0.1
 
 set -e
 
