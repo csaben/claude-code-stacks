@@ -21,6 +21,16 @@ pub struct StackRepository {
     pub branch: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StackMetadata {
+    pub source_repo: String,
+    pub source_owner: String,
+    pub source_name: String,
+    pub source_branch: String,
+    pub stack_name: String,
+    pub original_path: String,
+}
+
 impl Default for StackRepository {
     fn default() -> Self {
         Self {
@@ -170,34 +180,33 @@ impl RemoteStackManager {
         std::fs::create_dir_all(&stacks_dir)
             .context("Failed to create stacks directory")?;
 
-        println!("  ⬇️ Downloading stack: {}", stack_name);
+        println!("  ⬇️ Checking out stack: {}", stack_name);
         
-        // Use git sparse-checkout for efficient downloading
-        self.git_sparse_checkout(stack_name).await
-            .with_context(|| format!("Failed to download stack: {}", stack_name))?;
+        // Use sparse checkout to get only the specific stack
+        self.git_sparse_checkout_stack(stack_name).await
+            .with_context(|| format!("Failed to checkout stack: {}", stack_name))?;
 
         Ok(stack_path)
     }
 
-    /// Use git sparse-checkout to download only the specific stack
-    async fn git_sparse_checkout(&self, stack_name: &str) -> Result<()> {
-        let repo_url = format!("https://github.com/{}/{}.git", self.repository.owner, self.repository.repo);
-        let stack_path = std::env::current_dir()?.join("stacks").join(stack_name);
-        let temp_repo_path = std::env::current_dir()?.join("stacks").join(format!("{}-temp", stack_name));
-
-        // Clean up any existing temp directory
-        if temp_repo_path.exists() {
-            std::fs::remove_dir_all(&temp_repo_path)?;
+    /// Clone the repository and extract just the stack directory content
+    async fn git_clone_stack(&self, stack_name: &str) -> Result<()> {
+        let ssh_url = format!("git@github.com:{}/{}.git", self.repository.owner, self.repository.repo);
+        let temp_path = std::env::current_dir()?.join(format!("temp-{}", stack_name));
+        let final_stack_path = std::env::current_dir()?.join("stacks").join(stack_name);
+        
+        // Clean up temp path if it exists
+        if temp_path.exists() {
+            std::fs::remove_dir_all(&temp_path)?;
         }
-
-        // Clone with sparse checkout
+        
+        // Clone the full repository to a temporary location
+        println!("  📦 Cloning repository...");
         let clone_output = Command::new("git")
             .args(&[
                 "clone",
-                "--filter=blob:none",
-                "--sparse",
-                &repo_url,
-                temp_repo_path.to_str().unwrap(),
+                &ssh_url,
+                temp_path.to_str().unwrap(),
             ])
             .output()
             .context("Failed to execute git clone")?;
@@ -206,30 +215,156 @@ impl RemoteStackManager {
             bail!("Git clone failed: {}", String::from_utf8_lossy(&clone_output.stderr));
         }
 
-        // Set sparse checkout to only include the specific stack
-        let sparse_output = Command::new("git")
-            .current_dir(&temp_repo_path)
-            .args(&["sparse-checkout", "set", &format!("stacks/{}", stack_name)])
+        // Copy just the stack directory content to final location
+        let source_stack_path = temp_path.join("stacks").join(stack_name);
+        if !source_stack_path.exists() {
+            bail!("Stack '{}' not found in repository", stack_name);
+        }
+        
+        println!("  📁 Extracting stack content...");
+        std::fs::create_dir_all(&final_stack_path)?;
+        self.copy_dir_all(&source_stack_path, &final_stack_path)?;
+        
+        // Initialize git repository in the stack directory
+        let git_init_output = Command::new("git")
+            .current_dir(&final_stack_path)
+            .args(&["init"])
             .output()
-            .context("Failed to set sparse checkout")?;
-
-        if !sparse_output.status.success() {
-            bail!("Git sparse-checkout failed: {}", String::from_utf8_lossy(&sparse_output.stderr));
+            .context("Failed to initialize git repository")?;
+            
+        if !git_init_output.status.success() {
+            bail!("Git init failed: {}", String::from_utf8_lossy(&git_init_output.stderr));
+        }
+        
+        // Add the remote origin
+        let remote_output = Command::new("git")
+            .current_dir(&final_stack_path)
+            .args(&["remote", "add", "origin", &ssh_url])
+            .output()
+            .context("Failed to add remote origin")?;
+            
+        if !remote_output.status.success() {
+            bail!("Failed to add remote: {}", String::from_utf8_lossy(&remote_output.stderr));
+        }
+        
+        // Fetch from origin
+        let fetch_output = Command::new("git")
+            .current_dir(&final_stack_path)
+            .args(&["fetch", "origin"])
+            .output()
+            .context("Failed to fetch from origin")?;
+            
+        if !fetch_output.status.success() {
+            bail!("Failed to fetch: {}", String::from_utf8_lossy(&fetch_output.stderr));
+        }
+        
+        // Set up tracking branch
+        let branch_output = Command::new("git")
+            .current_dir(&final_stack_path)
+            .args(&["checkout", "-b", &self.repository.branch, &format!("origin/{}", self.repository.branch)])
+            .output()
+            .context("Failed to checkout branch")?;
+            
+        if !branch_output.status.success() {
+            bail!("Failed to checkout branch: {}", String::from_utf8_lossy(&branch_output.stderr));
         }
 
-        // Move the stack to its final location
-        let source_stack = temp_repo_path.join("stacks").join(stack_name);
-        if source_stack.exists() {
-            std::fs::rename(&source_stack, &stack_path)
-                .context("Failed to move downloaded stack")?;
-        } else {
-            bail!("Stack {} not found in repository", stack_name);
+        // Clean up temporary directory
+        std::fs::remove_dir_all(&temp_path)?;
+
+        // Create metadata file
+        let metadata = StackMetadata {
+            source_repo: ssh_url.clone(),
+            source_owner: self.repository.owner.clone(),
+            source_name: self.repository.repo.clone(),
+            source_branch: self.repository.branch.clone(),
+            stack_name: stack_name.to_string(),
+            original_path: format!("stacks/{}", stack_name),
+        };
+
+        self.save_stack_metadata(&final_stack_path, &metadata)?;
+        println!("  📋 Stack initialized as independent git repository");
+
+        Ok(())
+    }
+
+    /// Ensure we're in a git repository, initialize if needed
+    async fn ensure_git_repository(&self) -> Result<()> {
+        let git_dir = std::env::current_dir()?.join(".git");
+        
+        if !git_dir.exists() {
+            println!("  🎯 Initializing git repository...");
+            let init_output = Command::new("git")
+                .args(&["init"])
+                .output()
+                .context("Failed to initialize git repository")?;
+                
+            if !init_output.status.success() {
+                bail!("Git init failed: {}", String::from_utf8_lossy(&init_output.stderr));
+            }
+            
+            // Set up initial commit if no commits exist
+            let log_output = Command::new("git")
+                .args(&["log", "--oneline", "-1"])
+                .output();
+                
+            if log_output.is_err() || !log_output.unwrap().status.success() {
+                // Create initial commit
+                println!("  📝 Creating initial commit...");
+                
+                // Create a README if it doesn't exist
+                let readme_path = std::env::current_dir()?.join("README.md");
+                if !readme_path.exists() {
+                    std::fs::write(readme_path, "# Project with Claude Code Stacks\n\nThis project uses stacks for Claude Code workflows.\n")?;
+                }
+                
+                let add_output = Command::new("git")
+                    .args(&["add", "."])
+                    .output()
+                    .context("Failed to add files")?;
+                    
+                if !add_output.status.success() {
+                    bail!("Git add failed: {}", String::from_utf8_lossy(&add_output.stderr));
+                }
+                
+                let commit_output = Command::new("git")
+                    .args(&["commit", "-m", "feat: initial commit with stacks setup"])
+                    .output()
+                    .context("Failed to create initial commit")?;
+                    
+                if !commit_output.status.success() {
+                    bail!("Git commit failed: {}", String::from_utf8_lossy(&commit_output.stderr));
+                }
+            }
         }
+        
+        Ok(())
+    }
 
-        // Cleanup temp repository
-        std::fs::remove_dir_all(&temp_repo_path)
-            .context("Failed to cleanup temporary repository")?;
+    /// Copy a directory recursively
+    fn copy_dir_all(&self, src: &std::path::Path, dst: &std::path::Path) -> Result<()> {
+        std::fs::create_dir_all(dst)?;
+        for entry in std::fs::read_dir(src)? {
+            let entry = entry?;
+            let ty = entry.file_type()?;
+            if ty.is_dir() {
+                self.copy_dir_all(&entry.path(), &dst.join(entry.file_name()))?;
+            } else {
+                std::fs::copy(entry.path(), dst.join(entry.file_name()))?;
+            }
+        }
+        Ok(())
+    }
 
+    /// Save metadata about the stack's source repository
+    fn save_stack_metadata(&self, stack_path: &PathBuf, metadata: &StackMetadata) -> Result<()> {
+        let metadata_file = stack_path.join(".stack-metadata.json");
+        let metadata_json = serde_json::to_string_pretty(metadata)
+            .context("Failed to serialize stack metadata")?;
+        
+        std::fs::write(metadata_file, metadata_json)
+            .context("Failed to write stack metadata file")?;
+        
         Ok(())
     }
 

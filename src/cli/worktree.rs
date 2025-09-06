@@ -62,7 +62,7 @@ pub async fn run() -> Result<()> {
     }
 
     // Execute the worktree creation process
-    execute_worktree_creation(&config).await?;
+    execute_worktree_creation(&config, &current_branch).await?;
 
     println!("\n🎉 Worktree setup complete!");
     println!("💡 Attach to the tmux session with: tmux attach -t {}", config.tmux_session);
@@ -154,12 +154,11 @@ async fn gather_worktree_config(current_branch: &str, repo_name: &str) -> Result
     })
 }
 
-async fn execute_worktree_creation(config: &WorktreeConfig) -> Result<()> {
+async fn execute_worktree_creation(config: &WorktreeConfig, current_branch: &str) -> Result<()> {
     // Create the branch if needed
     let branch_name = match &config.branch_strategy {
         BranchStrategy::NewFromCurrent => {
             let target_branch_name = format!("feature-{}", config.task_name);
-            let current_branch = get_current_branch()?;
             
             // Check if we're already on the target branch
             if current_branch == target_branch_name {
