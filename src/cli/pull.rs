@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::Command;
 use anyhow::{Result, Context, bail};
 use dialoguer::Confirm;
@@ -105,7 +105,7 @@ async fn pull_single_stack(stack_name: String) -> Result<()> {
     // Check for uncommitted changes in the stack directory
     let status_output = Command::new("git")
         .current_dir(&stack_path)
-        .args(&["status", "--porcelain"])
+        .args(["status", "--porcelain"])
         .output()
         .context("Failed to check git status")?;
     
@@ -115,7 +115,7 @@ async fn pull_single_stack(stack_name: String) -> Result<()> {
         println!("  ⚠️ Warning: Stack has uncommitted changes:");
         let status_output = Command::new("git")
             .current_dir(&stack_path)
-            .args(&["status", "--short"])
+            .args(["status", "--short"])
             .output()
             .context("Failed to show git status")?;
         
@@ -139,29 +139,34 @@ async fn pull_single_stack(stack_name: String) -> Result<()> {
         println!("  💡 Tip: Run 'stacks push {}' to commit and push your changes first", stack_name);
     }
     
-    // Pull updates using regular git pull
-    println!("  📡 Pulling stack updates...");
+    // Pull updates using git subtree
+    println!("  📡 Pulling subtree updates from {}...", metadata.source_repo);
     let pull_output = Command::new("git")
-        .current_dir(&stack_path)
-        .args(&["pull", "origin", &metadata.source_branch])
+        .args([
+            "subtree", "pull",
+            "--prefix", &format!("stacks/{}", stack_name),
+            &metadata.source_repo,
+            "main",
+            "--squash"
+        ])
         .output()
-        .context("Failed to pull updates")?;
+        .context("Failed to pull subtree updates")?;
     
     if !pull_output.status.success() {
         let error = String::from_utf8_lossy(&pull_output.stderr);
         
         // Check if it's already up to date
         if error.contains("Already up to date") || error.contains("up-to-date") {
-            println!("  ✅ Stack is already up to date!");
+            println!("  ✅ Subtree is already up to date!");
             return Ok(());
         }
         
-        bail!("Failed to pull updates: {}", error);
+        bail!("Failed to pull subtree updates: {}", error);
     }
     
     let output_str = String::from_utf8_lossy(&pull_output.stdout);
     if output_str.contains("Already up to date") {
-        println!("  ✅ Stack is already up to date!");
+        println!("  ✅ Subtree is already up to date!");
         return Ok(());
     }
     
@@ -170,7 +175,7 @@ async fn pull_single_stack(stack_name: String) -> Result<()> {
     // Show recent changes
     let log_output = Command::new("git")
         .current_dir(&stack_path)
-        .args(&["log", "--oneline", "-5", "HEAD~5..HEAD"])
+        .args(["log", "--oneline", "-5", "HEAD~5..HEAD"])
         .output()
         .context("Failed to show recent changes")?;
     
@@ -188,7 +193,7 @@ async fn pull_single_stack(stack_name: String) -> Result<()> {
     Ok(())
 }
 
-fn load_stack_metadata(stack_path: &PathBuf) -> Result<StackMetadata> {
+fn load_stack_metadata(stack_path: &Path) -> Result<StackMetadata> {
     let metadata_file = stack_path.join(".stack-metadata.json");
     
     if !metadata_file.exists() {

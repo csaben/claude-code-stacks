@@ -163,6 +163,7 @@ impl SymlinkManager {
     }
 
     /// Remove symlinks for a specific stack
+    #[allow(dead_code)]
     pub async fn remove_stack_symlinks(&self, stack_name: &str) -> Result<()> {
         let dirs_to_check = ["agents", "commands"];
         

@@ -43,6 +43,7 @@ impl Default for StackRepository {
 
 pub struct RemoteStackManager {
     pub repository: StackRepository,
+    #[allow(dead_code)]
     cache_dir: PathBuf,
     client: reqwest::Client,
 }
@@ -63,6 +64,7 @@ impl RemoteStackManager {
         })
     }
 
+    #[allow(dead_code)]
     pub fn with_repository(repository: StackRepository) -> Result<Self> {
         let mut manager = Self::new()?;
         manager.repository = repository;
@@ -102,16 +104,7 @@ impl RemoteStackManager {
                 // Create a stack object for the remote stack
                 let mut stack = Stack::new(stack_name, local_path);
                 
-                // Check if we have this stack cached
-                if stack.claude_dir.exists() {
-                    if stack.is_valid() {
-                        stack.load_description().await?;
-                        stacks.push(stack);
-                        continue;
-                    }
-                }
-
-                // Fetch description from remote CLAUDE.md
+                // Always fetch description from remote CLAUDE.md (don't rely on local cache)
                 if let Some(description) = self.fetch_stack_description(&file.name).await? {
                     stack.description = Some(description);
                 }
@@ -157,7 +150,49 @@ impl RemoteStackManager {
         }
     }
 
-    /// Download and cache a stack from the remote repository
+    /// Add a stack as a git subtree
+    pub async fn add_stack_subtree(&self, stack_name: &str) -> Result<PathBuf> {
+        let stack_path = std::env::current_dir()?.join("stacks").join(stack_name);
+        
+        // Check if already exists
+        if stack_path.exists() {
+            println!("  📦 Stack already exists: {}", stack_name);
+            return Ok(stack_path);
+        }
+        
+        // For existing stacks like ts-lint-stack, use the specific repository
+        let repo_url = if stack_name == "ts-lint-stack" {
+            "git@github.com:csaben/ts-lint-stack.git".to_string()
+        } else {
+            // For other stacks, assume they're in separate repositories following the pattern
+            format!("git@github.com:{}/{}.git", self.repository.owner, stack_name)
+        };
+        
+        println!("  📥 Adding {} as subtree from {}", stack_name, repo_url);
+        
+        // Add as git subtree
+        let subtree_output = Command::new("git")
+            .args([
+                "subtree", "add", 
+                "--prefix", &format!("stacks/{}", stack_name),
+                &repo_url,
+                "main",
+                "--squash"
+            ])
+            .output()
+            .context("Failed to execute git subtree add")?;
+            
+        if !subtree_output.status.success() {
+            let error = String::from_utf8_lossy(&subtree_output.stderr);
+            bail!("Git subtree add failed: {}", error);
+        }
+        
+        println!("  ✅ Successfully added {} as subtree", stack_name);
+        Ok(stack_path)
+    }
+
+    /// Download and cache a stack from the remote repository (deprecated - use add_stack_subtree)
+    #[allow(dead_code)]
     pub async fn cache_stack(&self, stack_name: &str) -> Result<PathBuf> {
         // Check out to current working directory instead of cache
         let stack_path = std::env::current_dir()?.join("stacks").join(stack_name);
@@ -203,7 +238,7 @@ impl RemoteStackManager {
         // Clone the full repository to a temporary location
         println!("  📦 Cloning repository...");
         let clone_output = Command::new("git")
-            .args(&[
+            .args([
                 "clone",
                 &ssh_url,
                 temp_path.to_str().unwrap(),
@@ -228,7 +263,7 @@ impl RemoteStackManager {
         // Initialize git repository in the stack directory
         let git_init_output = Command::new("git")
             .current_dir(&final_stack_path)
-            .args(&["init"])
+            .args(["init"])
             .output()
             .context("Failed to initialize git repository")?;
             
@@ -239,7 +274,7 @@ impl RemoteStackManager {
         // Add the remote origin
         let remote_output = Command::new("git")
             .current_dir(&final_stack_path)
-            .args(&["remote", "add", "origin", &ssh_url])
+            .args(["remote", "add", "origin", &ssh_url])
             .output()
             .context("Failed to add remote origin")?;
             
@@ -250,7 +285,7 @@ impl RemoteStackManager {
         // Fetch from origin
         let fetch_output = Command::new("git")
             .current_dir(&final_stack_path)
-            .args(&["fetch", "origin"])
+            .args(["fetch", "origin"])
             .output()
             .context("Failed to fetch from origin")?;
             
@@ -261,7 +296,7 @@ impl RemoteStackManager {
         // Set up tracking branch
         let branch_output = Command::new("git")
             .current_dir(&final_stack_path)
-            .args(&["checkout", "-b", &self.repository.branch, &format!("origin/{}", self.repository.branch)])
+            .args(["checkout", "-b", &self.repository.branch, &format!("origin/{}", self.repository.branch)])
             .output()
             .context("Failed to checkout branch")?;
             
@@ -289,13 +324,14 @@ impl RemoteStackManager {
     }
 
     /// Ensure we're in a git repository, initialize if needed
+    #[allow(dead_code)]
     async fn ensure_git_repository(&self) -> Result<()> {
         let git_dir = std::env::current_dir()?.join(".git");
         
         if !git_dir.exists() {
             println!("  🎯 Initializing git repository...");
             let init_output = Command::new("git")
-                .args(&["init"])
+                .args(["init"])
                 .output()
                 .context("Failed to initialize git repository")?;
                 
@@ -305,7 +341,7 @@ impl RemoteStackManager {
             
             // Set up initial commit if no commits exist
             let log_output = Command::new("git")
-                .args(&["log", "--oneline", "-1"])
+                .args(["log", "--oneline", "-1"])
                 .output();
                 
             if log_output.is_err() || !log_output.unwrap().status.success() {
@@ -319,7 +355,7 @@ impl RemoteStackManager {
                 }
                 
                 let add_output = Command::new("git")
-                    .args(&["add", "."])
+                    .args(["add", "."])
                     .output()
                     .context("Failed to add files")?;
                     
@@ -328,7 +364,7 @@ impl RemoteStackManager {
                 }
                 
                 let commit_output = Command::new("git")
-                    .args(&["commit", "-m", "feat: initial commit with stacks setup"])
+                    .args(["commit", "-m", "feat: initial commit with stacks setup"])
                     .output()
                     .context("Failed to create initial commit")?;
                     
@@ -343,12 +379,17 @@ impl RemoteStackManager {
 
     /// Copy a directory recursively
     fn copy_dir_all(&self, src: &std::path::Path, dst: &std::path::Path) -> Result<()> {
+        Self::copy_dir_all_static(src, dst)
+    }
+
+    /// Static helper for copying directories recursively  
+    fn copy_dir_all_static(src: &std::path::Path, dst: &std::path::Path) -> Result<()> {
         std::fs::create_dir_all(dst)?;
         for entry in std::fs::read_dir(src)? {
             let entry = entry?;
             let ty = entry.file_type()?;
             if ty.is_dir() {
-                self.copy_dir_all(&entry.path(), &dst.join(entry.file_name()))?;
+                Self::copy_dir_all_static(&entry.path(), &dst.join(entry.file_name()))?;
             } else {
                 std::fs::copy(entry.path(), dst.join(entry.file_name()))?;
             }
@@ -357,7 +398,7 @@ impl RemoteStackManager {
     }
 
     /// Save metadata about the stack's source repository
-    fn save_stack_metadata(&self, stack_path: &PathBuf, metadata: &StackMetadata) -> Result<()> {
+    fn save_stack_metadata(&self, stack_path: &Path, metadata: &StackMetadata) -> Result<()> {
         let metadata_file = stack_path.join(".stack-metadata.json");
         let metadata_json = serde_json::to_string_pretty(metadata)
             .context("Failed to serialize stack metadata")?;
@@ -369,11 +410,13 @@ impl RemoteStackManager {
     }
 
     /// Get the cache directory path
+    #[allow(dead_code)]
     pub fn cache_dir(&self) -> &Path {
         &self.cache_dir
     }
 
     /// Clear the entire stack cache
+    #[allow(dead_code)]
     pub fn clear_cache(&self) -> Result<()> {
         if self.cache_dir.exists() {
             std::fs::remove_dir_all(&self.cache_dir)
@@ -385,6 +428,7 @@ impl RemoteStackManager {
     }
 
     /// Update cached stack (re-download)
+    #[allow(dead_code)]
     pub async fn update_stack(&self, stack_name: &str) -> Result<PathBuf> {
         let stack_path = self.cache_dir.join(stack_name);
         
@@ -400,6 +444,7 @@ impl RemoteStackManager {
 }
 
 /// Fallback to local stacks directory for development/testing
+#[allow(dead_code)]
 pub async fn discover_local_stacks() -> Result<Vec<Stack>> {
     use super::stack_manager::discover_stacks;
     discover_stacks().await

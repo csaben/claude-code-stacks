@@ -71,6 +71,7 @@ impl Stack {
 }
 
 /// Discover all available stacks in the stacks directory
+#[allow(dead_code)]
 pub async fn discover_stacks() -> Result<Vec<Stack>> {
     let stacks_dir = Path::new("stacks");
     

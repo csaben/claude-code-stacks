@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::Command;
 use anyhow::{Result, Context, bail};
 use dialoguer::{Confirm, Input};
@@ -43,8 +43,8 @@ async fn push_all_stacks(message: Option<String>) -> Result<()> {
         let stack_name = entry.file_name().to_string_lossy().to_string();
         let stack_path = entry.path().to_path_buf();
         
-        // Check if it's a git repository with changes
-        if stack_path.join(".git").exists() && has_uncommitted_changes(&stack_path)? {
+        // Check if this subtree has changes in the main repository
+        if has_subtree_changes(&stack_name)? {
             stacks_with_changes.push(stack_name);
         }
     }
@@ -88,12 +88,21 @@ async fn push_all_stacks(message: Option<String>) -> Result<()> {
     Ok(())
 }
 
-fn has_uncommitted_changes(stack_path: &std::path::PathBuf) -> Result<bool> {
+fn has_uncommitted_changes(stack_path: &Path) -> Result<bool> {
     let status_output = Command::new("git")
         .current_dir(stack_path)
-        .args(&["status", "--porcelain"])
+        .args(["status", "--porcelain"])
         .output()
         .context("Failed to check git status")?;
+    
+    Ok(!status_output.stdout.is_empty())
+}
+
+fn has_subtree_changes(stack_name: &str) -> Result<bool> {
+    let status_output = Command::new("git")
+        .args(["status", "--porcelain", &format!("stacks/{}", stack_name)])
+        .output()
+        .context("Failed to check subtree git status")?;
     
     Ok(!status_output.stdout.is_empty())
 }
@@ -108,38 +117,37 @@ async fn push_single_stack(stack_name: String, message: Option<String>) -> Resul
         bail!("Stack '{}' not found. Run 'stacks checkout {}' first.", stack_name, stack_name);
     }
     
-    // Check if it's a git repository
-    if !stack_path.join(".git").exists() {
-        bail!("Stack '{}' is not a git repository. It may have been created manually or with an older version.", stack_name);
-    }
+    // For subtrees, determine the repository URL based on stack name
+    let repo_url = if stack_name == "ts-lint-stack" {
+        "git@github.com:csaben/ts-lint-stack.git".to_string()
+    } else {
+        format!("git@github.com:csaben/{}.git", stack_name)
+    };
+    println!("  📋 Target: {}", repo_url);
     
-    // Load stack metadata
-    let metadata = load_stack_metadata(&stack_path)?;
-    println!("  📋 Source: {}", metadata.source_repo);
-    
-    // Check for uncommitted changes
-    let status_output = Command::new("git")
-        .current_dir(&stack_path)
-        .args(&["status", "--porcelain"])
-        .output()
-        .context("Failed to check git status")?;
-    
-    let has_changes = !status_output.stdout.is_empty();
+    // Check for changes in the subtree
+    let has_changes = has_subtree_changes(&stack_name)?;
     
     if !has_changes {
         println!("  ℹ️ No changes detected in stack '{}'", stack_name);
         return Ok(());
     }
     
-    // Show the changes
-    println!("  📝 Changes detected:");
+    // Show the changes in the subtree
+    println!("  📝 Changes detected in subtree:");
     let status_output = Command::new("git")
-        .current_dir(&stack_path)
-        .args(&["status", "--short"])
+        .args(["status", "--short", &format!("stacks/{}", stack_name)])
         .output()
-        .context("Failed to show git status")?;
+        .context("Failed to show subtree git status")?;
     
-    println!("{}", String::from_utf8_lossy(&status_output.stdout));
+    let output_str = String::from_utf8_lossy(&status_output.stdout);
+    // Clean up the output to remove the stacks/stack-name/ prefix for better readability
+    for line in output_str.lines() {
+        if !line.trim().is_empty() {
+            let clean_line = line.replace(&format!("stacks/{}/", stack_name), "");
+            println!("    {}", clean_line);
+        }
+    }
     
     // Get commit message
     let commit_message = if let Some(msg) = message {
@@ -147,7 +155,7 @@ async fn push_single_stack(stack_name: String, message: Option<String>) -> Resul
     } else if std::io::stdin().is_terminal() {
         Input::<String>::new()
             .with_prompt("Enter commit message")
-            .with_initial_text(&format!("feat: update {} stack", stack_name))
+            .with_initial_text(format!("feat: update {} stack", stack_name))
             .interact_text()?
     } else {
         format!("feat: update {} stack", stack_name)
@@ -156,7 +164,7 @@ async fn push_single_stack(stack_name: String, message: Option<String>) -> Resul
     // Confirm the push
     let should_proceed = if std::io::stdin().is_terminal() {
         Confirm::new()
-            .with_prompt(&format!("Push changes to {}?", metadata.source_repo))
+            .with_prompt(format!("Push subtree changes to {}?", repo_url))
             .default(true)
             .interact()?
     } else {
@@ -169,63 +177,51 @@ async fn push_single_stack(stack_name: String, message: Option<String>) -> Resul
         return Ok(());
     }
     
-    // Stage all changes in the stack repository
-    println!("  📋 Staging stack changes...");
+    // Stage changes in main repository (subtree changes)
+    println!("  📋 Staging subtree changes...");
     let add_output = Command::new("git")
-        .current_dir(&stack_path)
-        .args(&["add", "."])
+        .args(["add", &format!("stacks/{}", stack_name)])
         .output()
-        .context("Failed to stage stack changes")?;
+        .context("Failed to stage subtree changes")?;
     
     if !add_output.status.success() {
         let error = String::from_utf8_lossy(&add_output.stderr);
-        bail!("Failed to stage stack changes: {}", error);
+        bail!("Failed to stage subtree changes: {}", error);
     }
     
-    // Commit the changes to the stack repository
-    println!("  💾 Committing stack changes...");
+    // Commit the changes in main repository
+    println!("  💾 Committing subtree changes...");
     let commit_output = Command::new("git")
-        .current_dir(&stack_path)
-        .args(&["commit", "-m", &commit_message])
+        .args(["commit", "-m", &format!("feat({}): {}", stack_name, commit_message)])
         .output()
-        .context("Failed to commit stack changes")?;
+        .context("Failed to commit subtree changes")?;
     
     if !commit_output.status.success() {
         let error = String::from_utf8_lossy(&commit_output.stderr);
-        bail!("Failed to commit stack changes: {}", error);
+        bail!("Failed to commit subtree changes: {}", error);
     }
     
-    // Push directly to the stack's source repository
-    println!("  🚀 Pushing to origin...");
+    // Push subtree changes back to the stack's repository
+    println!("  🚀 Pushing subtree to {}...", repo_url);
     let push_output = Command::new("git")
-        .current_dir(&stack_path)
-        .args(&["push", "origin", &metadata.source_branch])
+        .args([
+            "subtree", "push",
+            "--prefix", &format!("stacks/{}", stack_name),
+            &repo_url,
+            "main"
+        ])
         .output()
-        .context("Failed to push to origin")?;
+        .context("Failed to push subtree")?;
     
     if !push_output.status.success() {
         let error = String::from_utf8_lossy(&push_output.stderr);
-        bail!("Failed to push to origin: {}", error);
+        bail!("Failed to push subtree: {}", error);
     }
     
-    println!("  ✅ Successfully pushed changes!");
-    println!("  📝 Changes pushed directly to {} repository via subtree", metadata.source_repo);
+    println!("  ✅ Successfully pushed subtree changes!");
+    println!("  📝 Changes pushed to {} via git subtree", repo_url);
     
     Ok(())
 }
 
-fn load_stack_metadata(stack_path: &PathBuf) -> Result<StackMetadata> {
-    let metadata_file = stack_path.join(".stack-metadata.json");
-    
-    if !metadata_file.exists() {
-        bail!("Stack metadata not found. This stack may have been created with an older version or manually.");
-    }
-    
-    let metadata_content = std::fs::read_to_string(metadata_file)
-        .context("Failed to read stack metadata")?;
-    
-    let metadata: StackMetadata = serde_json::from_str(&metadata_content)
-        .context("Failed to parse stack metadata")?;
-    
-    Ok(metadata)
-}
+// Metadata loading no longer needed for subtree-based stacks

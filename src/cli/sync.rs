@@ -7,6 +7,7 @@ use dialoguer::Confirm;
 #[derive(Debug, Clone)]
 pub struct DockerService {
     pub name: String,
+    #[allow(dead_code)]
     pub image: String,
     pub ports: Vec<String>,
     pub environment: HashMap<String, String>,
@@ -19,7 +20,7 @@ pub enum ServiceType {
     Redis,
     MongoDB,
     MySQL,
-    Unknown(String),
+    Unknown(()),
 }
 
 pub async fn run() -> Result<()> {
@@ -115,13 +116,11 @@ async fn parse_docker_compose(compose_file: &Path) -> Result<Vec<DockerService>>
 
     let mut services = Vec::new();
     
-    if let Some(services_section) = yaml.get("services") {
-        if let YamlValue::Mapping(services_map) = services_section {
-            for (service_name, service_config) in services_map {
-                if let Some(name) = service_name.as_str() {
-                    if let Some(service) = parse_service_config(name, service_config) {
-                        services.push(service);
-                    }
+    if let Some(YamlValue::Mapping(services_map)) = yaml.get("services") {
+        for (service_name, service_config) in services_map {
+            if let Some(name) = service_name.as_str() {
+                if let Some(service) = parse_service_config(name, service_config) {
+                    services.push(service);
                 }
             }
         }
@@ -172,19 +171,17 @@ fn determine_service_type(image: &str, service_name: &str) -> ServiceType {
     } else if image_lower.contains("mysql") || name_lower.contains("mysql") {
         ServiceType::MySQL
     } else {
-        ServiceType::Unknown(image.to_string())
+        ServiceType::Unknown(())
     }
 }
 
 fn extract_ports(config: &YamlValue) -> Vec<String> {
     let mut ports = Vec::new();
     
-    if let Some(ports_section) = config.get("ports") {
-        if let YamlValue::Sequence(ports_array) = ports_section {
-            for port in ports_array {
-                if let Some(port_str) = port.as_str() {
-                    ports.push(port_str.to_string());
-                }
+    if let Some(YamlValue::Sequence(ports_array)) = config.get("ports") {
+        for port in ports_array {
+            if let Some(port_str) = port.as_str() {
+                ports.push(port_str.to_string());
             }
         }
     }
@@ -223,7 +220,7 @@ fn extract_environment(config: &YamlValue) -> HashMap<String, String> {
 fn generate_mcp_commands(services: &[DockerService]) -> Vec<String> {
     services
         .iter()
-        .map(|service| generate_mcp_command_for_service(service))
+        .map(generate_mcp_command_for_service)
         .collect()
 }
 

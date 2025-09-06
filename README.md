@@ -1,10 +1,8 @@
 # Claude Code Stacks CLI
 
-A powerful CLI tool for managing Claude Code workflow configurations, git worktrees, and MCP server synchronization.
+A CLI tool for managing Claude Code workflow configurations, git worktrees, and MCP server synchronization.
 
-## 🚀 Quick Start
-
-### Installation
+## Installation
 
 Install with a single command:
 
@@ -17,7 +15,7 @@ This will:
 - Install it to `~/.local/bin/stacks`
 - Update your PATH if needed
 
-### Basic Usage
+## Basic Usage
 
 ```bash
 # Discover and checkout stacks
@@ -30,7 +28,7 @@ stacks worktree
 stacks sync
 ```
 
-## 📖 Overview
+## Overview
 
 Claude Code Stacks helps you manage reusable Claude Code configurations across projects. Each "stack" contains:
 
@@ -39,13 +37,13 @@ Claude Code Stacks helps you manage reusable Claude Code configurations across p
 - **Settings**: Claude Code configuration
 - **Documentation**: Stack-specific instructions
 
-## 🎯 Commands
+## Commands
 
 ### `stacks` (default command)
 
-Discover and check out one or more stacks from your `stacks/` directory.
+Discover and check out stacks from remote repositories.
 
-**Features:**
+Features:
 - Interactive fuzzy search with `fzf`
 - Multi-stack selection
 - Automatic symlink creation for agents and commands
@@ -53,7 +51,7 @@ Discover and check out one or more stacks from your `stacks/` directory.
 - CLAUDE.md import updates
 - MCP server validation
 
-**Example:**
+Example:
 ```bash
 stacks
 # Opens fzf interface to select stacks
@@ -64,13 +62,13 @@ stacks
 
 Create git worktrees with integrated tmux sessions for isolated development.
 
-**Features:**
+Features:
 - Interactive branch strategy selection
 - Configurable worktree locations
 - Automatic tmux session creation
 - Claude Code integration in split pane
 
-**Example:**
+Example:
 ```bash
 stacks worktree
 # Guided workflow:
@@ -84,13 +82,13 @@ stacks worktree
 
 Synchronize MCP server configurations from docker-compose files.
 
-**Features:**
+Features:
 - Auto-discovery of compose files
 - Service type detection (Postgres, Redis, etc.)
 - MCP command generation
 - Automatic server configuration
 
-**Example:**
+Example:
 ```bash
 stacks sync
 # Scans for docker-compose.yml files
@@ -98,7 +96,7 @@ stacks sync
 # Applies configurations
 ```
 
-## 📁 Stack Structure
+## Stack Structure
 
 A typical stack directory looks like:
 
@@ -153,7 +151,7 @@ Stack-specific instructions:
 Provides comprehensive linting capabilities...
 ```
 
-## 🔧 Configuration
+## Configuration
 
 ### Dependencies
 
@@ -171,7 +169,7 @@ The CLI respects standard environment variables:
 - `HOME` - User home directory
 - `PATH` - Executable search path
 
-## 🏗️ Development
+## Development
 
 ### Building from Source
 
@@ -209,7 +207,7 @@ src/
     └── claude_md_updater.rs # CLAUDE.md management
 ```
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -218,11 +216,11 @@ src/
 5. Run `./build.sh test` to verify
 6. Submit a pull request
 
-## 📄 License
+## License
 
 MIT License - see [LICENSE](LICENSE) for details.
 
-## 🔗 Links
+## Links
 
 - [Claude Code Documentation](https://docs.anthropic.com/en/docs/claude-code)
 - [GitHub Repository](https://github.com/csaben/claude-code-stacks)

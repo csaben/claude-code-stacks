@@ -1,5 +1,4 @@
 use std::fs;
-use std::path::Path;
 use tempfile::TempDir;
 use assert_cmd::Command;
 use predicates::prelude::*;

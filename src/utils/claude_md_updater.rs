@@ -103,6 +103,7 @@ impl ClaudeMdUpdater {
     }
 
     /// Remove a stack import from CLAUDE.md
+    #[allow(dead_code)]
     pub async fn remove_stack_import(&self, stack_name: &str) -> Result<()> {
         if !self.claude_md_path.exists() {
             return Ok(()); // Nothing to remove

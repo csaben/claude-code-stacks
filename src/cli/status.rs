@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use anyhow::{Result, Context};
 use walkdir::WalkDir;
@@ -32,54 +32,36 @@ pub async fn run() -> Result<()> {
         
         println!("\n📦 Stack: {}", stack_name);
         
-        // Check if it's a git repository
-        if !stack_path.join(".git").exists() {
-            println!("  ⚠️ Not a git repository (created manually or with older version)");
-            continue;
-        }
+        // For subtrees, check if this is a valid stack directory
+        println!("  📂 Type: Subtree (part of main repository)");
         
-        // Load metadata if available
-        if let Ok(metadata) = load_stack_metadata(&stack_path) {
-            println!("  🔗 Source: {}", metadata.source_repo);
-        }
-        
-        // Get current branch
-        if let Ok(branch) = get_current_branch(&stack_path) {
-            println!("  🌱 Branch: {}", branch);
-        }
-        
-        // Check for uncommitted changes
-        match check_git_status(&stack_path) {
+        // Check for subtree changes in main repository
+        match check_subtree_status(&stack_name) {
             Ok(status_info) => {
                 if status_info.has_changes {
-                    println!("  📝 Status: {} changes", status_info.changes_count);
+                    println!("  📝 Status: {} changes in subtree", status_info.changes_count);
                     if !status_info.changes.is_empty() {
                         for change in status_info.changes.iter().take(5) {
-                            println!("    {}", change);
+                            // Remove the stacks/stack-name/ prefix for cleaner display
+                            let clean_change = change.replace(&format!("stacks/{}/", stack_name), "");
+                            println!("    {}", clean_change);
                         }
                         if status_info.changes.len() > 5 {
                             println!("    ... and {} more", status_info.changes.len() - 5);
                         }
                     }
                 } else {
-                    println!("  ✅ Status: Clean (no changes)");
-                }
-                
-                // Check if ahead/behind origin
-                if let Ok(remote_status) = get_remote_status(&stack_path) {
-                    if !remote_status.is_empty() {
-                        println!("  📡 Remote: {}", remote_status);
-                    }
+                    println!("  ✅ Status: Clean (no changes in subtree)");
                 }
             }
-            Err(_) => {
-                println!("  ❌ Status: Failed to get git status");
+            Err(e) => {
+                println!("  ❌ Status: Failed to get subtree status: {}", e);
             }
         }
         
-        // Check when last modified
-        if let Ok(last_commit) = get_last_commit_info(&stack_path) {
-            println!("  🕒 Last commit: {}", last_commit);
+        // Show last commit info for the subtree
+        if let Ok(commit_info) = get_subtree_last_commit(&stack_name) {
+            println!("  🕒 Last subtree change: {}", commit_info);
         }
     }
     
@@ -97,7 +79,7 @@ struct GitStatusInfo {
     changes: Vec<String>,
 }
 
-fn load_stack_metadata(stack_path: &PathBuf) -> Result<StackMetadata> {
+fn load_stack_metadata(stack_path: &Path) -> Result<StackMetadata> {
     let metadata_file = stack_path.join(".stack-metadata.json");
     
     let metadata_content = std::fs::read_to_string(metadata_file)
@@ -112,7 +94,7 @@ fn load_stack_metadata(stack_path: &PathBuf) -> Result<StackMetadata> {
 fn get_current_branch(stack_path: &PathBuf) -> Result<String> {
     let output = Command::new("git")
         .current_dir(stack_path)
-        .args(&["branch", "--show-current"])
+        .args(["branch", "--show-current"])
         .output()
         .context("Failed to get current branch")?;
     
@@ -126,7 +108,7 @@ fn get_current_branch(stack_path: &PathBuf) -> Result<String> {
 fn check_git_status(stack_path: &PathBuf) -> Result<GitStatusInfo> {
     let output = Command::new("git")
         .current_dir(stack_path)
-        .args(&["status", "--porcelain"])
+        .args(["status", "--porcelain"])
         .output()
         .context("Failed to check git status")?;
     
@@ -148,13 +130,13 @@ fn get_remote_status(stack_path: &PathBuf) -> Result<String> {
     // Fetch from origin first (quietly)
     let _fetch_output = Command::new("git")
         .current_dir(stack_path)
-        .args(&["fetch", "origin", "--quiet"])
+        .args(["fetch", "origin", "--quiet"])
         .output();
     
     // Check if ahead/behind
     let output = Command::new("git")
         .current_dir(stack_path)
-        .args(&["status", "-b", "--porcelain"])
+        .args(["status", "-b", "--porcelain"])
         .output()
         .context("Failed to check remote status")?;
     
@@ -181,7 +163,7 @@ fn get_remote_status(stack_path: &PathBuf) -> Result<String> {
 fn get_last_commit_info(stack_path: &PathBuf) -> Result<String> {
     let output = Command::new("git")
         .current_dir(stack_path)
-        .args(&["log", "-1", "--format=%h - %s (%cr)"])
+        .args(["log", "-1", "--format=%h - %s (%cr)"])
         .output()
         .context("Failed to get last commit info")?;
     
@@ -189,5 +171,43 @@ fn get_last_commit_info(stack_path: &PathBuf) -> Result<String> {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {
         Ok("No commits found".to_string())
+    }
+}
+
+fn check_subtree_status(stack_name: &str) -> Result<GitStatusInfo> {
+    let output = Command::new("git")
+        .args(["status", "--porcelain", &format!("stacks/{}", stack_name)])
+        .output()
+        .context("Failed to check subtree git status")?;
+    
+    let status_lines = String::from_utf8_lossy(&output.stdout);
+    let changes: Vec<String> = status_lines
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| line.to_string())
+        .collect();
+    
+    Ok(GitStatusInfo {
+        has_changes: !changes.is_empty(),
+        changes_count: changes.len(),
+        changes,
+    })
+}
+
+fn get_subtree_last_commit(stack_name: &str) -> Result<String> {
+    let output = Command::new("git")
+        .args(["log", "-1", "--format=%h - %s (%cr)", "--", &format!("stacks/{}", stack_name)])
+        .output()
+        .context("Failed to get last commit info for subtree")?;
+    
+    if output.status.success() {
+        let commit_info = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if commit_info.is_empty() {
+            Ok("No commits found for subtree".to_string())
+        } else {
+            Ok(commit_info)
+        }
+    } else {
+        Ok("No commits found for subtree".to_string())
     }
 }

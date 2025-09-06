@@ -4,7 +4,7 @@ use skim::prelude::*;
 use std::io::Cursor;
 
 use crate::core::stack_manager::Stack;
-use crate::core::remote_stack_manager::{RemoteStackManager, discover_local_stacks};
+use crate::core::remote_stack_manager::RemoteStackManager;
 use crate::core::symlink_manager::SymlinkManager;
 use crate::core::settings_merger::SettingsMerger;
 use crate::core::mcp_validator::McpValidator;
@@ -23,25 +23,11 @@ pub async fn run_with_stack(direct_stack: Option<String>) -> Result<()> {
     
     println!("📦 Discovering available stacks...");
     
-    // Try remote stacks first, fall back to local if needed
-    let stacks = match RemoteStackManager::new() {
-        Ok(remote_manager) => {
-            match remote_manager.discover_remote_stacks().await {
-                Ok(remote_stacks) => {
-                    println!("  🌐 Found {} remote stack(s) from GitHub", remote_stacks.len());
-                    remote_stacks
-                }
-                Err(_) => {
-                    println!("  🔄 Remote stacks unavailable, checking for local stacks...");
-                    discover_local_stacks().await.context("Failed to discover local stacks")?
-                }
-            }
-        }
-        Err(_) => {
-            println!("  📁 Using local stacks directory...");
-            discover_local_stacks().await.context("Failed to discover local stacks")?
-        }
-    };
+    // Discover available stacks from remote (GitHub)
+    let remote_manager = RemoteStackManager::new().context("Failed to initialize remote stack manager")?;
+    let stacks = remote_manager.discover_remote_stacks().await.context("Failed to discover remote stacks")?;
+    
+    println!("  🌐 Found {} remote stack(s) from GitHub", stacks.len());
     
     if stacks.is_empty() {
         println!("No stacks found in the stacks/ directory.");
@@ -97,25 +83,22 @@ pub async fn run_with_stack(direct_stack: Option<String>) -> Result<()> {
         return Ok(());
     }
 
-    // Initialize remote manager for downloading
-    let remote_manager = RemoteStackManager::new().ok();
+    // Initialize remote manager for downloading  
+    let remote_manager = RemoteStackManager::new().context("Failed to initialize remote stack manager for processing")?;
 
     // Process each selected stack
     for stack in selected_stack_objects {
         println!("\n🔧 Processing stack: {}", stack.name);
         
-        // Ensure stack is cached locally if it's a remote stack
-        let stack_path = if let Some(ref manager) = remote_manager {
-            // Check if this is a remote stack (not already local)
-            if !stack.claude_dir.exists() {
-                manager.cache_stack(&stack.name).await
-                    .with_context(|| format!("Failed to download stack {}", stack.name))?
-            } else {
-                stack.path.clone()
-            }
+        // Add stack as subtree if not already present
+        let stack_path = stack.path.clone();
+        if !stack.path.exists() {
+            // Add stack as git subtree
+            remote_manager.add_stack_subtree(&stack.name).await
+                .with_context(|| format!("Failed to add stack {} as subtree", stack.name))?;
         } else {
-            stack.path.clone()
-        };
+            println!("  📁 Stack already present: {}", stack.name);
+        }
 
         // Update stack with the correct path
         let cached_stack = if stack_path != stack.path {

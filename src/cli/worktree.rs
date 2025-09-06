@@ -27,7 +27,7 @@ pub async fn run() -> Result<()> {
     
     // Check if we're in a git repository
     let git_status = Command::new("git")
-        .args(&["status", "--porcelain"])
+        .args(["status", "--porcelain"])
         .output()
         .context("Failed to check git status")?;
 
@@ -168,7 +168,7 @@ async fn execute_worktree_creation(config: &WorktreeConfig, current_branch: &str
                 println!("🌱 Creating branch {} from current branch...", target_branch_name);
                 
                 let output = Command::new("git")
-                    .args(&["checkout", "-b", &target_branch_name])
+                    .args(["checkout", "-b", &target_branch_name])
                     .output()
                     .context("Failed to create new branch")?;
 
@@ -186,7 +186,7 @@ async fn execute_worktree_creation(config: &WorktreeConfig, current_branch: &str
             
             // First, fetch latest changes
             Command::new("git")
-                .args(&["fetch", "origin"])
+                .args(["fetch", "origin"])
                 .output()
                 .context("Failed to fetch from origin")?;
 
@@ -200,7 +200,7 @@ async fn execute_worktree_creation(config: &WorktreeConfig, current_branch: &str
             };
 
             let output = Command::new("git")
-                .args(&["checkout", "-b", &branch_name, main_branch])
+                .args(["checkout", "-b", &branch_name, main_branch])
                 .output()
                 .context("Failed to create branch from main")?;
 
@@ -220,7 +220,7 @@ async fn execute_worktree_creation(config: &WorktreeConfig, current_branch: &str
             println!("🌱 Creating branch {} from {}...", branch_name, remote_branch);
             
             let output = Command::new("git")
-                .args(&["checkout", "-b", &branch_name, remote_branch])
+                .args(["checkout", "-b", &branch_name, remote_branch])
                 .output()
                 .context("Failed to create branch from remote")?;
 
@@ -236,7 +236,7 @@ async fn execute_worktree_creation(config: &WorktreeConfig, current_branch: &str
     // Create the worktree
     println!("🏗️ Creating worktree at {}...", config.location.display());
     let output = Command::new("git")
-        .args(&["worktree", "add", config.location.to_str().unwrap(), &branch_name])
+        .args(["worktree", "add", config.location.to_str().unwrap(), &branch_name])
         .output()
         .context("Failed to create git worktree")?;
 
@@ -255,7 +255,7 @@ async fn execute_worktree_creation(config: &WorktreeConfig, current_branch: &str
 async fn setup_tmux_session(config: &WorktreeConfig) -> Result<()> {
     // Check if session already exists
     let session_exists = Command::new("tmux")
-        .args(&["has-session", "-t", &config.tmux_session])
+        .args(["has-session", "-t", &config.tmux_session])
         .output()
         .map(|output| output.status.success())
         .unwrap_or(false);
@@ -268,7 +268,7 @@ async fn setup_tmux_session(config: &WorktreeConfig) -> Result<()> {
 
         if should_kill {
             Command::new("tmux")
-                .args(&["kill-session", "-t", &config.tmux_session])
+                .args(["kill-session", "-t", &config.tmux_session])
                 .output()
                 .context("Failed to kill existing tmux session")?;
         } else {
@@ -283,7 +283,7 @@ async fn setup_tmux_session(config: &WorktreeConfig) -> Result<()> {
 
     // Create session with first window in the worktree directory
     Command::new("tmux")
-        .args(&[
+        .args([
             "new-session", "-d", "-s", &config.tmux_session,
             "-c", worktree_path.to_str().unwrap()
         ])
@@ -292,7 +292,7 @@ async fn setup_tmux_session(config: &WorktreeConfig) -> Result<()> {
 
     // Split the window vertically and start Claude Code in the right pane
     Command::new("tmux")
-        .args(&[
+        .args([
             "split-window", "-h", "-t", &format!("{}:0", config.tmux_session),
             "-c", worktree_path.to_str().unwrap(),
             "claude"
@@ -302,7 +302,7 @@ async fn setup_tmux_session(config: &WorktreeConfig) -> Result<()> {
 
     // Select the left pane (development pane)
     Command::new("tmux")
-        .args(&["select-pane", "-t", &format!("{}:0.0", config.tmux_session)])
+        .args(["select-pane", "-t", &format!("{}:0.0", config.tmux_session)])
         .output()
         .context("Failed to select tmux pane")?;
 
@@ -313,7 +313,7 @@ async fn setup_tmux_session(config: &WorktreeConfig) -> Result<()> {
 
 fn get_current_branch() -> Result<String> {
     let output = Command::new("git")
-        .args(&["rev-parse", "--abbrev-ref", "HEAD"])
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .output()
         .context("Failed to get current branch")?;
 
@@ -331,7 +331,7 @@ fn get_current_branch() -> Result<String> {
 
 fn get_repo_name() -> Result<String> {
     let output = Command::new("git")
-        .args(&["rev-parse", "--show-toplevel"])
+        .args(["rev-parse", "--show-toplevel"])
         .output()
         .context("Failed to get repository root")?;
 
@@ -354,7 +354,7 @@ fn get_repo_name() -> Result<String> {
 
 fn branch_exists(branch_name: &str) -> bool {
     Command::new("git")
-        .args(&["rev-parse", "--verify", branch_name])
+        .args(["rev-parse", "--verify", branch_name])
         .output()
         .map(|output| output.status.success())
         .unwrap_or(false)

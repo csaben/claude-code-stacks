@@ -11,6 +11,7 @@ pub struct McpServer {
     pub transport: String,
     pub command: Option<String>,
     pub url: Option<String>,
+    #[allow(dead_code)]
     pub env: Option<HashMap<String, String>>,
 }
 
@@ -54,25 +55,21 @@ impl McpValidator {
         
         // Look for MCP configurations in various possible locations
         if let Some(mcp_config) = settings.get("mcp") {
-            if let Some(servers_config) = mcp_config.get("servers") {
-                if let Value::Object(servers_map) = servers_config {
-                    for (name, config) in servers_map {
-                        let server = self.parse_mcp_server_config(name, config)?;
-                        servers.push(server);
-                    }
+            if let Some(Value::Object(servers_map)) = mcp_config.get("servers") {
+                for (name, config) in servers_map {
+                    let server = self.parse_mcp_server_config(name, config)?;
+                    servers.push(server);
                 }
             }
         }
 
         // Also check for permissions that might reference MCP servers
         if let Some(permissions) = settings.get("permissions") {
-            if let Some(allow) = permissions.get("allow") {
-                if let Value::Array(allow_array) = allow {
-                    for permission in allow_array {
-                        if let Value::String(perm_str) = permission {
-                            if let Some(server) = self.extract_mcp_from_permission(perm_str) {
-                                servers.push(server);
-                            }
+            if let Some(Value::Array(allow_array)) = permissions.get("allow") {
+                for permission in allow_array {
+                    if let Value::String(perm_str) = permission {
+                        if let Some(server) = self.extract_mcp_from_permission(perm_str) {
+                            servers.push(server);
                         }
                     }
                 }
@@ -143,7 +140,7 @@ impl McpValidator {
     /// Get list of currently installed MCP servers
     async fn get_installed_mcp_servers(&self) -> Result<Vec<String>> {
         let output = Command::new("claude")
-            .args(&["mcp", "list"])
+            .args(["mcp", "list"])
             .output()
             .context("Failed to run 'claude mcp list'")?;
 
@@ -213,11 +210,16 @@ impl McpValidator {
 
     /// Merge two JSON values
     fn merge_json(&self, target: &mut Value, source: Value) {
+        Self::merge_json_static(target, source)
+    }
+
+    /// Static helper for merging JSON values
+    fn merge_json_static(target: &mut Value, source: Value) {
         match (target, source) {
             (Value::Object(target_map), Value::Object(source_map)) => {
                 for (key, value) in source_map {
                     match target_map.get_mut(&key) {
-                        Some(target_value) => self.merge_json(target_value, value),
+                        Some(target_value) => Self::merge_json_static(target_value, value),
                         None => {
                             target_map.insert(key, value);
                         }
