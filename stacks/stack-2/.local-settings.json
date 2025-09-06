@@ -1,0 +1,35 @@
+{
+  "claude_code_settings": {
+    "agents": [
+      {
+        "name": "testing-specialist", 
+        "description": "Specialized agent for infrastructure and example testing",
+        "permissions": {
+          "file_operations": ["read", "write", "edit"],
+          "bash_commands": [
+            "docker*",
+            "docker-compose*",
+            "hadolint*",
+            "nginx -t*",
+            "./test-*.sh*",
+            "find*",
+            "curl*",
+            "wget*"
+          ],
+          "network_access": true
+        }
+      }
+    ],
+    "auto_approve": [
+      "docker-compose config",
+      "docker build --dry-run",
+      "hadolint",
+      "nginx -t",
+      "./test-docker.sh",
+      "./test-nginx.sh", 
+      "./test-examples.sh"
+    ],
+    "working_directory": ".",
+    "test_on_change": true
+  }
+}

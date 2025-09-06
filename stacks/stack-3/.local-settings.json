@@ -1,0 +1,40 @@
+{
+  "claude_code_settings": {
+    "agents": [
+      {
+        "name": "style-formatter",
+        "description": "Specialized agent for Clark idiomatic style enforcement",
+        "permissions": {
+          "file_operations": ["read", "write", "edit"],
+          "bash_commands": [
+            "bun*",
+            "uv*",
+            "sed*",
+            "grep*",
+            "find*",
+            "wc*",
+            "./apply-clark-style.sh*",
+            "./check-style.sh*",
+            "./optimize-readme.sh*",
+            "./standardize-deps.sh*"
+          ]
+        }
+      }
+    ],
+    "auto_approve": [
+      "./check-style.sh",
+      "bun install",
+      "uv sync",
+      "sed -i 's/[😀-🙏]//g'",
+      "grep -l"
+    ],
+    "working_directory": ".",
+    "style_rules": {
+      "no_emojis": true,
+      "concise_readme": true,
+      "prefer_bun": true,
+      "prefer_uv": true,
+      "max_readme_lines": 200
+    }
+  }
+}
