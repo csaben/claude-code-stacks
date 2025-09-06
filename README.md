@@ -2,10 +2,10 @@
 
 Complete natural language workflow automation system for Claude Code with global CLI, fzf integration, and tmux monitoring.
 
-## 🚀 One-Liner Installation
+## One-Liner Installation
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/csaben/claude-code-stacks/main/install.sh | sh
+curl -LsSf https://raw.githubusercontent.com/csaben/claude-code-stacks/main/install.sh | bash
 ```
 
 ## 🎯 Quick Start
@@ -91,7 +91,7 @@ tmux-stack-manager.sh attach   # Attach to session
 ### First Time Setup (Any New Machine)
 ```bash
 # One command installation
-curl -LsSf https://raw.githubusercontent.com/csaben/claude-code-stacks/main/install.sh | sh
+curl -LsSf https://raw.githubusercontent.com/csaben/claude-code-stacks/main/install.sh | bash
 
 # Restart terminal or source profile
 source ~/.zshrc  # or ~/.bashrc

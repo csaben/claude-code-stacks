@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Claude Code Stacks - One-liner Installation
-# curl -LsSf https://raw.githubusercontent.com/csaben/claude-code-stacks/main/install.sh | sh
+# curl -LsSf https://raw.githubusercontent.com/csaben/claude-code-stacks/main/install.sh | bash
 
 set -e
 
@@ -152,7 +152,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 show_help() {
-    cat << EOF
+    cat << HELP_EOF
 Claude Code Stacks - Natural Language Workflow Automation
 
 Usage: stacks [command]
@@ -175,7 +175,7 @@ Natural Language Interface:
     "Apply Clark's style guidelines"
 
 The system understands your intent and executes the appropriate workflows.
-EOF
+HELP_EOF
 }
 
 update_cache() {
@@ -317,7 +317,7 @@ create_stack_commands() {
     fi
     
     # Create natural language interface command
-    cat > "$commands_dir/${stack_name}-interface.md" << EOF
+    cat > "$commands_dir/${stack_name}-interface.md" << INTERFACE_EOF
 # $stack_name Natural Language Interface
 
 This command enables natural language interaction with $stack_name.
@@ -332,7 +332,7 @@ claude "Apply $stack_name workflow to fix issues"
 
 ## Implementation
 The system uses headless Claude Code to interpret natural language requests and execute appropriate $stack_name workflows.
-EOF
+INTERFACE_EOF
 }
 
 check_mcp_requirements() {
