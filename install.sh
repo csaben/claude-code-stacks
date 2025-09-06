@@ -153,28 +153,26 @@ NC='\033[0m'
 
 show_help() {
     cat << HELP_EOF
-Claude Code Stacks - Natural Language Workflow Automation
+Claude Code Stacks - Git Checkout and Tmux Orchestrator
 
-Usage: stacks [command]
+Usage: stacks [command] [description]
 
 Commands:
-    (no args)         Interactive stack selection with fzf
-    list              List available stacks  
-    status            Show active stacks in current project
-    update            Update stack repository cache
-    contribute        Contribute local changes back to repository
-    help              Show this help message
+    checkout <description>    Let Claude decide which stacks to checkout based on description
+    list                      List available stacks  
+    status                    Show active stacks in current project
+    update                    Update stack repository cache
+    contribute                Show modified stacks for contribution
+    tmux                      Start tmux monitoring session
+    help                      Show this help message
 
-Natural Language Interface:
-    Just describe what you want to do in plain English!
-    
-    Examples:
-    "I want to add linting to this project"
-    "Push my stack changes back to the repo"
-    "Set up testing for my Docker configs"
-    "Apply Clark's style guidelines"
+Examples:
+    stacks checkout "I need linting for this TypeScript project"
+    stacks checkout "Set up testing and Clark style for React app"
+    stacks list
+    stacks tmux
 
-The system understands your intent and executes the appropriate workflows.
+The system asks Claude to interpret your description and checkout appropriate stacks.
 HELP_EOF
 }
 
@@ -208,36 +206,58 @@ list_stacks() {
     done
 }
 
-interactive_selection() {
+claude_checkout() {
+    local description="$1"
+    
+    if [[ -z "$description" ]]; then
+        echo -e "${RED}Error: Please provide a description${NC}"
+        echo "Example: stacks checkout 'I need linting for this TypeScript project'"
+        return 1
+    fi
+    
     if [[ ! -d "$CACHE_DIR/stacks" ]]; then
         echo "Initializing stack cache..."
         update_cache
     fi
     
-    # Create selection menu
-    local options=()
+    echo -e "${BLUE}Asking Claude to interpret: ${NC}\"$description\""
+    
+    # Build prompt for Claude with available stacks
+    local available_stacks=""
     for stack_dir in "$CACHE_DIR/stacks"/stack-*; do
         if [[ -d "$stack_dir" ]]; then
             local stack_name=$(basename "$stack_dir")
-            local description=$(grep -m1 "^# Description:" "$stack_dir/CLAUDE.md" 2>/dev/null | cut -d: -f2- | xargs || echo "No description")
-            options+=("$stack_name: $description")
+            local desc=$(grep -m1 "^# Description:" "$stack_dir/CLAUDE.md" 2>/dev/null | cut -d: -f2- | xargs || echo "No description")
+            available_stacks+="- $stack_name: $desc\n"
         fi
     done
     
-    # Use fzf for selection
-    local selected=$(printf '%s\n' "${options[@]}" | fzf --multi --prompt="Select stacks: " --header="Use TAB for multi-select, ENTER to confirm")
+    local claude_prompt="Based on this request: \"$description\"
     
-    if [[ -n "$selected" ]]; then
-        echo -e "${GREEN}Selected stacks:${NC}"
-        echo "$selected" | while IFS= read -r line; do
-            local stack_name=$(echo "$line" | cut -d: -f1)
-            echo "  ✓ $stack_name"
-            setup_stack_in_project "$stack_name"
-        done
+Available stacks:
+$available_stacks
+
+Please respond with just the stack names (space-separated) that would be most helpful for this request. For example: 'stack-1 stack-3'
+
+Do not include explanations, just the stack names."
+    
+    if command -v claude &> /dev/null; then
+        echo -e "${BLUE}Claude is selecting stacks...${NC}"
+        local selected_stacks=$(claude -p "$claude_prompt" --mode=plan 2>/dev/null | tr -d '\n' | grep -o 'stack-[0-9]' | tr '\n' ' ')
         
-        echo ""
-        echo -e "${BLUE}Stacks are now available in your project!${NC}"
-        echo -e "Try: ${YELLOW}claude 'help me set up linting for this project'${NC}"
+        if [[ -n "$selected_stacks" ]]; then
+            echo -e "${GREEN}Claude selected: ${NC}$selected_stacks"
+            for stack_name in $selected_stacks; do
+                setup_stack_in_project "$stack_name"
+            done
+            echo ""
+            echo -e "${BLUE}Stacks ready! Try: ${YELLOW}claude 'help me with this project'${NC}"
+        else
+            echo -e "${YELLOW}Claude couldn't determine stacks. Use: ${NC}stacks list${YELLOW} to see options${NC}"
+        fi
+    else
+        echo -e "${YELLOW}Claude Code not found. Please install Claude Code first.${NC}"
+        echo "Alternative: use 'stacks list' and manually specify stacks"
     fi
 }
 
@@ -410,8 +430,51 @@ contribute_changes() {
     done
 }
 
+start_tmux_monitoring() {
+    local active_stacks=()
+    
+    # Find active stacks
+    for stack_dir in "$CURRENT_PROJECT_DIR"/stack-*; do
+        if [[ -d "$stack_dir" ]] && [[ -f "$stack_dir/CLAUDE.md" ]]; then
+            active_stacks+=($(basename "$stack_dir"))
+        fi
+    done
+    
+    if [[ ${#active_stacks[@]} -eq 0 ]]; then
+        echo -e "${YELLOW}No stacks found. Run 'stacks checkout <description>' first${NC}"
+        return 1
+    fi
+    
+    local session_name="claude-stacks-$(basename "$CURRENT_PROJECT_DIR")"
+    
+    if tmux has-session -t "$session_name" 2>/dev/null; then
+        echo "Attaching to existing session: $session_name"
+        tmux attach-session -t "$session_name"
+        return
+    fi
+    
+    echo -e "${BLUE}Creating tmux session: $session_name${NC}"
+    
+    # Create main session
+    tmux new-session -d -s "$session_name" -c "$CURRENT_PROJECT_DIR"
+    tmux rename-window -t "$session_name:0" "main"
+    
+    # Create window for each stack
+    for stack_name in "${active_stacks[@]}"; do
+        tmux new-window -t "$session_name" -n "$stack_name" -c "$CURRENT_PROJECT_DIR/$stack_name"
+        tmux send-keys -t "$session_name:$stack_name" "echo 'Stack: $stack_name'" Enter
+        tmux send-keys -t "$session_name:$stack_name" "echo 'Ready for Claude Code operations'" Enter
+    done
+    
+    echo "Tmux session ready. Attach with: tmux attach-session -t $session_name"
+}
+
 # Main command processing
 case "${1:-}" in
+    checkout)
+        shift
+        claude_checkout "$*"
+        ;;
     list)
         list_stacks
         ;;
@@ -424,15 +487,18 @@ case "${1:-}" in
     contribute)
         contribute_changes
         ;;
+    tmux)
+        start_tmux_monitoring
+        ;;
     help|--help|-h)
         show_help
         ;;
     "")
-        interactive_selection
+        show_help
         ;;
     *)
         echo -e "${RED}Unknown command: $1${NC}"
-        echo "Run 'stacks help' for usage information"
+        show_help
         exit 1
         ;;
 esac

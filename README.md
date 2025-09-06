@@ -1,6 +1,6 @@
 # Claude Code Stacks
 
-Complete natural language workflow automation system for Claude Code with global CLI, fzf integration, and tmux monitoring.
+Git checkout and tmux orchestrator for Claude Code workflow setups. Let Claude decide which stacks to use, while stacks handles the git and tmux mechanics.
 
 ## One-Liner Installation
 
@@ -8,29 +8,26 @@ Complete natural language workflow automation system for Claude Code with global
 curl -LsSf https://raw.githubusercontent.com/csaben/claude-code-stacks/main/install.sh | bash
 ```
 
-## 🎯 Quick Start
+## Quick Start
 
 ```bash
 # Navigate to any project
 cd ~/my-awesome-project/
 
-# Interactive stack selection with fzf
-stacks
+# Let Claude decide which stacks to checkout
+stacks checkout "I need linting and style checking for this TypeScript project"
 
-# Natural language interface - just describe what you want!
-claude "help me set up linting for this project"
-claude "fix any style issues and apply Clark's guidelines"
-claude "I modified the linting stack, contribute it back to the repo"
+# Claude picks appropriate stacks, stacks does git checkout + tmux setup
+# Then use Claude normally with the configured stacks
+claude "help me set up this project properly"
 ```
 
-## ✨ Key Features
+## Key Features
 
-- **🌐 Global CLI**: Works from any directory with `stacks` command
-- **🔍 fzf Integration**: Beautiful interactive stack selection
-- **🗣️ Natural Language**: Just describe what you want in plain English
-- **🔄 Auto-Contribution**: Easy workflow to contribute improvements back
-- **📺 Tmux Monitoring**: Multi-pane monitoring of all active stacks
-- **🤖 Headless Automation**: Uses Claude Code's headless mode for automation
+- **Smart Orchestration**: Claude interprets your needs, stacks handles git checkout
+- **Git-based**: Each stack is a proper git repository you can modify and contribute to
+- **Tmux Integration**: Automatic multi-pane monitoring setup
+- **Simple Interface**: Just describe what you need, no complex commands to remember
 
 ## System Architecture
 
@@ -65,31 +62,37 @@ my-project/
 | **stack-6** | Design doc generation → Google Drive | "update documentation", "sync design docs" |
 | **stack-7** | Database setup with MCP config | "configure database", "set up postgres" |
 
-## 🎛️ Commands
+## Commands
 
-### Global Commands (available anywhere)
 ```bash
-stacks                    # Interactive stack selection with fzf
-stacks list              # List available stacks
-stacks status           # Show active stacks in current project  
-stacks update           # Update stack repository cache
-stack-contribute        # Contribute local changes back to repo
+# Core workflow
+stacks checkout "description of what you need"  # Claude selects and checks out stacks
+stacks list                                      # List available stacks  
+stacks status                                    # Show active stacks in project
+stacks tmux                                      # Start tmux monitoring session
+
+# Maintenance  
+stacks update                                    # Update stack repository cache
+stacks contribute                                # Show modified stacks ready for contribution
 ```
 
-### Natural Language Interface
-Just talk to Claude Code naturally:
-```bash
-claude "I want to add linting to this TypeScript project"
-claude "Test my Docker configurations"
-claude "Apply our style guidelines to the entire codebase"  
-claude "Push my stack improvements to the main repository"
-```
+## Example Usage
 
-### Tmux Monitoring
 ```bash
-tmux-stack-manager.sh start    # Start multi-pane monitoring
-tmux-stack-manager.sh status   # Check monitoring status
-tmux-stack-manager.sh attach   # Attach to session
+# Let Claude pick stacks based on your description
+stacks checkout "React app that needs linting, testing, and Clark's style"
+# → Claude selects stack-1 (linting), stack-2 (testing), stack-3 (style)
+# → stacks does git checkout for each
+# → Ready to use claude with those stack configurations
+
+# Start tmux monitoring  
+stacks tmux
+# → Creates session with pane for each active stack
+# → Jump between panes to monitor Claude operations
+
+# Work normally with Claude
+claude "set up this React project with proper linting"
+# → Claude uses the checked-out stack configurations
 ```
 
 ## 🚦 Complete User Journey
