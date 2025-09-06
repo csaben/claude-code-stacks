@@ -243,97 +243,43 @@ interactive_selection() {
 
 setup_stack_in_project() {
     local stack_name="$1"
-    local stack_source="$CACHE_DIR/stacks/$stack_name"
-    local project_claude_dir="$CURRENT_PROJECT_DIR/.claude"
+    local stack_dir="$CURRENT_PROJECT_DIR/$stack_name"
     
-    if [[ ! -d "$stack_source" ]]; then
-        echo -e "${RED}Error: Stack '$stack_name' not found${NC}"
-        return 1
+    echo "  Setting up $stack_name via git checkout..."
+    
+    # Check if stack directory already exists
+    if [[ -d "$stack_dir" ]]; then
+        echo "    $stack_name already exists, updating..."
+        cd "$stack_dir"
+        git pull origin main
+        cd "$CURRENT_PROJECT_DIR"
+    else
+        echo "    Checking out $stack_name..."
+        # Use sparse-checkout to get only the specific stack
+        git clone --depth 1 --no-checkout "$REPO_URL" "$stack_dir"
+        cd "$stack_dir"
+        git sparse-checkout init --cone
+        git sparse-checkout set "stacks/$stack_name"
+        git checkout main
+        
+        # Move stack contents to root level of checkout
+        if [[ -d "stacks/$stack_name" ]]; then
+            mv stacks/$stack_name/* .
+            mv stacks/$stack_name/.* . 2>/dev/null || true
+            rm -rf stacks/
+        fi
+        
+        cd "$CURRENT_PROJECT_DIR"
     fi
     
-    # Create .claude directory structure
-    mkdir -p "$project_claude_dir/stacks/$stack_name"
-    mkdir -p "$project_claude_dir/commands"
-    
-    # Copy stack configuration
-    cp -r "$stack_source"/* "$project_claude_dir/stacks/$stack_name/"
-    
     # Check MCP requirements for this stack
-    echo "  Checking MCP requirements for $stack_name..."
+    echo "    Checking MCP requirements for $stack_name..."
     check_mcp_requirements "$stack_name"
     
-    # Create project-specific CLAUDE.md if it doesn't exist
-    if [[ ! -f "$project_claude_dir/CLAUDE.md" ]]; then
-        cat > "$project_claude_dir/CLAUDE.md" << 'CLAUDE_EOF'
-# Claude Code Project Configuration
-
-This project uses Claude Code Stacks for workflow automation.
-
-## Active Stacks
-<!-- This section is automatically maintained -->
-
-## Natural Language Interface
-
-You can interact with this project using natural language. Just describe what you want to do:
-
-- "Help me fix the linting issues"
-- "Set up testing for this project" 
-- "Apply our style guidelines"
-- "Deploy my changes"
-- "Update the documentation"
-
-The system will automatically understand your intent and execute the appropriate workflows.
-
-## Available Commands
-
-The following automated workflows are available based on your active stacks:
-<!-- Commands are automatically generated from active stacks -->
-CLAUDE_EOF
-    fi
-    
-    # Update active stacks in CLAUDE.md
-    update_active_stacks_list "$stack_name"
-    
-    # Create natural language command interface
-    create_stack_commands "$stack_name"
+    echo "  ✓ $stack_name ready in $CURRENT_PROJECT_DIR/$stack_name"
 }
 
-update_active_stacks_list() {
-    local new_stack="$1"
-    local claude_md="$CURRENT_PROJECT_DIR/.claude/CLAUDE.md"
-    
-    # Add stack to active stacks section
-    sed -i "/## Active Stacks/a\\- $new_stack: $(grep -m1 "^# Description:" "$CACHE_DIR/stacks/$new_stack/CLAUDE.md" 2>/dev/null | cut -d: -f2- | xargs)" "$claude_md"
-}
-
-create_stack_commands() {
-    local stack_name="$1"
-    local commands_dir="$CURRENT_PROJECT_DIR/.claude/commands"
-    
-    # Check MCP requirements for this stack
-    if command -v mcp-checker.sh &> /dev/null; then
-        echo "  Checking MCP requirements..."
-        mcp-checker.sh check "$stack_name" 2>/dev/null || true
-    fi
-    
-    # Create natural language interface command
-    cat > "$commands_dir/${stack_name}-interface.md" << INTERFACE_EOF
-# $stack_name Natural Language Interface
-
-This command enables natural language interaction with $stack_name.
-
-## Usage
-Users can simply describe what they want to do in natural language:
-
-\`\`\`
-claude "I want to use $stack_name to help with my project"
-claude "Apply $stack_name workflow to fix issues"
-\`\`\`
-
-## Implementation
-The system uses headless Claude Code to interpret natural language requests and execute appropriate $stack_name workflows.
-INTERFACE_EOF
-}
+# Functions removed - no longer needed with git-based approach
 
 check_mcp_requirements() {
     local stack_name="$1"
@@ -386,28 +332,41 @@ show_mcp_setup_hint() {
 }
 
 show_project_status() {
-    if [[ ! -d "$CURRENT_PROJECT_DIR/.claude/stacks" ]]; then
+    local active_stacks=()
+    
+    # Look for stack directories in current project
+    for stack_dir in "$CURRENT_PROJECT_DIR"/stack-*; do
+        if [[ -d "$stack_dir" ]] && [[ -f "$stack_dir/CLAUDE.md" ]]; then
+            active_stacks+=($(basename "$stack_dir"))
+        fi
+    done
+    
+    if [[ ${#active_stacks[@]} -eq 0 ]]; then
         echo -e "${YELLOW}No stacks configured in current project${NC}"
         echo "Run 'stacks' to select and configure stacks"
         return
     fi
     
     echo -e "${GREEN}Active stacks in current project:${NC}"
-    for stack_dir in "$CURRENT_PROJECT_DIR/.claude/stacks"/stack-*; do
-        if [[ -d "$stack_dir" ]]; then
-            local stack_name=$(basename "$stack_dir")
-            echo "  ✓ $stack_name"
+    for stack_name in "${active_stacks[@]}"; do
+        local git_status=""
+        if [[ -d "$CURRENT_PROJECT_DIR/$stack_name/.git" ]]; then
+            cd "$CURRENT_PROJECT_DIR/$stack_name"
+            local branch=$(git branch --show-current)
+            local behind=$(git rev-list --count HEAD..origin/main 2>/dev/null || echo "0")
+            if [[ $behind -gt 0 ]]; then
+                git_status=" (behind by $behind commits)"
+            fi
+            cd "$CURRENT_PROJECT_DIR"
         fi
+        echo "  ✓ $stack_name$git_status"
     done
     
     echo ""
     echo -e "${BLUE}Checking MCP requirements:${NC}"
-    for stack_dir in "$CURRENT_PROJECT_DIR/.claude/stacks"/stack-*; do
-        if [[ -d "$stack_dir" ]]; then
-            local stack_name=$(basename "$stack_dir")
-            echo "  $stack_name:"
-            check_mcp_requirements "$stack_name"
-        fi
+    for stack_name in "${active_stacks[@]}"; do
+        echo "  $stack_name:"
+        check_mcp_requirements "$stack_name"
     done
     
     echo ""
@@ -420,10 +379,35 @@ show_project_status() {
 contribute_changes() {
     echo -e "${BLUE}Checking for local stack modifications...${NC}"
     
-    # This will be enhanced to detect and contribute changes back
-    # For now, provide guidance
-    echo -e "${YELLOW}Contribution workflow coming soon!${NC}"
-    echo "For now, manually create PRs to: $REPO_URL"
+    local modified_stacks=()
+    
+    # Check each stack directory for modifications
+    for stack_dir in "$CURRENT_PROJECT_DIR"/stack-*; do
+        if [[ -d "$stack_dir/.git" ]]; then
+            stack_name=$(basename "$stack_dir")
+            cd "$stack_dir"
+            
+            if [[ -n "$(git status --porcelain)" ]]; then
+                modified_stacks+=("$stack_name")
+                echo -e "  ${GREEN}✓${NC} Modified: $stack_name"
+                git status --short | sed 's/^/    /'
+            fi
+            
+            cd "$CURRENT_PROJECT_DIR"
+        fi
+    done
+    
+    if [[ ${#modified_stacks[@]} -eq 0 ]]; then
+        echo -e "${YELLOW}No modifications detected in any stacks${NC}"
+        return
+    fi
+    
+    echo ""
+    echo -e "${GREEN}Found ${#modified_stacks[@]} modified stack(s)${NC}"
+    echo -e "${BLUE}To contribute your changes:${NC}"
+    for stack_name in "${modified_stacks[@]}"; do
+        echo "  cd $stack_name && git add . && git commit -m 'your changes' && git push origin main"
+    done
 }
 
 # Main command processing
