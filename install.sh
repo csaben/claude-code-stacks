@@ -292,14 +292,88 @@ setup_stack_in_project() {
         cd "$CURRENT_PROJECT_DIR"
     fi
     
+    # Create central .claude directory structure for Claude Code discovery
+    mkdir -p "$CURRENT_PROJECT_DIR/.claude/agents"
+    mkdir -p "$CURRENT_PROJECT_DIR/.claude/commands"
+    
+    # Create symlinks for agents so Claude Code can discover them
+    if [[ -d "$stack_dir/.claude/agents" ]]; then
+        echo "    Creating agent symlinks for Claude Code discovery..."
+        for agent_file in "$stack_dir/.claude/agents"/*.md; do
+            if [[ -f "$agent_file" ]]; then
+                local agent_name=$(basename "$agent_file")
+                local symlink_path="$CURRENT_PROJECT_DIR/.claude/agents/$agent_name"
+                
+                # Remove existing symlink if it exists
+                [[ -L "$symlink_path" ]] && rm "$symlink_path"
+                
+                # Create relative symlink
+                ln -s "../../$stack_name/.claude/agents/$agent_name" "$symlink_path"
+                echo "      ✓ $agent_name"
+            fi
+        done
+    fi
+    
+    # Create symlinks for commands
+    if [[ -d "$stack_dir/.claude/commands" ]]; then
+        echo "    Creating command symlinks..."
+        for command_file in "$stack_dir/.claude/commands"/*.md; do
+            if [[ -f "$command_file" ]]; then
+                local command_name=$(basename "$command_file")
+                local symlink_path="$CURRENT_PROJECT_DIR/.claude/commands/$command_name"
+                
+                # Remove existing symlink if it exists
+                [[ -L "$symlink_path" ]] && rm "$symlink_path"
+                
+                # Create relative symlink
+                ln -s "../../$stack_name/.claude/commands/$command_name" "$symlink_path"
+            fi
+        done
+    fi
+    
+    # Create or update project CLAUDE.md
+    create_project_claude_md
+    
     # Check MCP requirements for this stack
     echo "    Checking MCP requirements for $stack_name..."
     check_mcp_requirements "$stack_name"
     
-    echo "  ✓ $stack_name ready in $CURRENT_PROJECT_DIR/$stack_name"
+    echo "  ✓ $stack_name ready with agents discoverable by Claude Code"
 }
 
-# Functions removed - no longer needed with git-based approach
+create_project_claude_md() {
+    local claude_md="$CURRENT_PROJECT_DIR/.claude/CLAUDE.md"
+    
+    if [[ ! -f "$claude_md" ]]; then
+        cat > "$claude_md" << 'CLAUDE_EOF'
+# Claude Code Project Configuration
+
+This project uses Claude Code Stacks for workflow automation.
+
+## Active Stacks
+
+The following stacks are checked out and available:
+
+## Usage
+
+You can interact with this project using natural language with Claude Code.
+The agents from your active stacks are automatically available.
+
+Examples:
+- "Help me set up this project properly"
+- "Fix any linting issues"
+- "Apply our coding standards"
+- "Set up testing infrastructure"
+
+## Stack Management
+
+- `stacks status` - Show active stacks
+- `stacks checkout "<description>"` - Let Claude select stacks based on description
+- `stacks tmux` - Start monitoring session
+
+CLAUDE_EOF
+    fi
+}
 
 check_mcp_requirements() {
     local stack_name="$1"
