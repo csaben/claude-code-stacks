@@ -10,7 +10,6 @@ See @stacks/stack-2/CLAUDE.md for additional stack instructions.
 
 See @stacks/ts-lint-stack/CLAUDE.md for additional stack instructions.
 
-See @stacks/stackstack/CLAUDE.md for additional stack instructions.
 
 ## motivation
 claude code configurations vary from project type to project type (i.e. uv python fastapi server vs react typescript). the goal is to quickly be able to checkout one of these `stack`'s that is setup as one would to solve the entire project type in the current working directory of another project using claude. this way you can combine the current stuff with the one hyper optimized `stack`. another main goal is that every project should improve the `stacks` used. so if i make a change to a stack i checked out, it should be super easy to push the change back to the source repo so next time i use it in a project i pick up right where i left off. 
