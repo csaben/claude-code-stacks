@@ -207,7 +207,7 @@ list_stacks() {
 }
 
 claude_checkout() {
-    local description="$1"
+    local description="$*"
     
     if [[ -z "$description" ]]; then
         echo -e "${RED}Error: Please provide a description${NC}"
@@ -220,44 +220,42 @@ claude_checkout() {
         update_cache
     fi
     
-    echo -e "${BLUE}Asking Claude to interpret: ${NC}\"$description\""
+    echo -e "${BLUE}Launching Claude with stack setup prompts...${NC}"
     
-    # Build prompt for Claude with available stacks
-    local available_stacks=""
+    # Build comprehensive prompt for Claude with all available setup prompts
+    local stack_prompts=""
     for stack_dir in "$CACHE_DIR/stacks"/stack-*; do
         if [[ -d "$stack_dir" ]]; then
             local stack_name=$(basename "$stack_dir")
             local desc=$(grep -m1 "^# Description:" "$stack_dir/CLAUDE.md" 2>/dev/null | cut -d: -f2- | xargs || echo "No description")
-            available_stacks+="- $stack_name: $desc\n"
+            local setup_prompt=$(grep -m1 "^# Setup Prompt:" "$stack_dir/CLAUDE.md" 2>/dev/null | cut -d: -f2- | sed 's/^[[:space:]]*//' || echo "No setup prompt defined")
+            stack_prompts+="**$stack_name**: $desc
+Setup: $setup_prompt
+
+"
         fi
     done
     
-    local claude_prompt="Based on this request: \"$description\"
-    
-Available stacks:
-$available_stacks
+    local claude_prompt="User request: \"$description\"
 
-Please respond with just the stack names (space-separated) that would be most helpful for this request. For example: 'stack-1 stack-3'
+Available Claude Code stacks (each contains agents, commands, and configuration):
 
-Do not include explanations, just the stack names."
+$stack_prompts
+
+Based on the user's request, please:
+1. Determine which stacks would be most helpful
+2. Execute the setup prompts for those stacks
+3. Create proper git worktrees in the project directory  
+4. Set up symlinks so Claude Code can discover all agents
+5. Apply any immediate improvements (like style fixes)
+
+The goal is to have a fully configured project where the user can continue using Claude Code with all the relevant stack capabilities available."
     
     if command -v claude &> /dev/null; then
-        echo -e "${BLUE}Claude is selecting stacks...${NC}"
-        local selected_stacks=$(claude -p "$claude_prompt" --mode=plan 2>/dev/null | tr -d '\n' | grep -o 'stack-[0-9]' | tr '\n' ' ')
-        
-        if [[ -n "$selected_stacks" ]]; then
-            echo -e "${GREEN}Claude selected: ${NC}$selected_stacks"
-            for stack_name in $selected_stacks; do
-                setup_stack_in_project "$stack_name"
-            done
-            echo ""
-            echo -e "${BLUE}Stacks ready! Try: ${YELLOW}claude 'help me with this project'${NC}"
-        else
-            echo -e "${YELLOW}Claude couldn't determine stacks. Use: ${NC}stacks list${YELLOW} to see options${NC}"
-        fi
+        echo "Starting Claude with stack setup context..."
+        claude "$claude_prompt"
     else
         echo -e "${YELLOW}Claude Code not found. Please install Claude Code first.${NC}"
-        echo "Alternative: use 'stacks list' and manually specify stacks"
     fi
 }
 
@@ -547,7 +545,7 @@ start_tmux_monitoring() {
 case "${1:-}" in
     checkout)
         shift
-        claude_checkout "$*"
+        claude_checkout "$@"
         ;;
     list)
         list_stacks
