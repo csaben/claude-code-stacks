@@ -1,6 +1,9 @@
 use std::path::{Path, PathBuf};
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs as unix_fs;
+#[cfg(windows)]
+use std::os::windows::fs as windows_fs;
 use anyhow::{Result, Context};
 use walkdir::WalkDir;
 
@@ -129,9 +132,22 @@ impl SymlinkManager {
             source.to_path_buf()
         };
             
+        #[cfg(unix)]
         unix_fs::symlink(&relative_source, &prefixed_target)
             .with_context(|| format!("Failed to create symlink from {} to {}", 
                 relative_source.display(), prefixed_target.display()))?;
+                
+        #[cfg(windows)]
+        {
+            // On Windows, determine if source is a file or directory and use appropriate function
+            if relative_source.is_dir() {
+                windows_fs::symlink_dir(&relative_source, &prefixed_target)
+            } else {
+                windows_fs::symlink_file(&relative_source, &prefixed_target)
+            }
+            .with_context(|| format!("Failed to create symlink from {} to {}", 
+                relative_source.display(), prefixed_target.display()))?;
+        }
 
         println!("  📎 Created symlink: {}", prefixed_target.display());
         Ok(())
