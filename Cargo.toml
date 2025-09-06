@@ -1,0 +1,32 @@
+[package]
+name = "stacks"
+version = "0.1.0"
+edition = "2021"
+description = "A CLI tool for managing Claude Code workflow stacks"
+authors = ["clark saben"]
+license = "MIT"
+repository = "https://github.com/csaben/claude-code-stacks"
+homepage = "https://github.com/csaben/claude-code-stacks"
+documentation = "https://github.com/csaben/claude-code-stacks#readme"
+keywords = ["cli", "claude", "workflow", "automation", "ai"]
+categories = ["command-line-utilities", "development-tools"]
+readme = "README.md"
+
+[[bin]]
+name = "stacks"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.0", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+tokio = { version = "1.0", features = ["full"] }
+anyhow = "1.0"
+walkdir = "2.0"
+dialoguer = "0.11"
+
+[dev-dependencies]
+tempfile = "3.0"
+assert_cmd = "2.0"
+predicates = "3.0"

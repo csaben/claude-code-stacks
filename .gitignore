@@ -1,19 +1,37 @@
-# Examples and testing
-examples/
+# Rust
+/target/
+Cargo.lock
 
-# OS files
-.DS_Store
-Thumbs.db
+# Distribution
+/dist/
 
-# IDE files
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local development
+.env
+.env.local
+
+# Logs
+*.log
+
+# Test artifacts
+/test-output/
 
 # Temporary files
-*.tmp
-*.log
+/tmp/
+/temp/
+
+# Examples and testing (if needed)
+examples/
 
 # Node modules (if any examples use Node)
 node_modules/
@@ -25,8 +43,3 @@ __pycache__/
 
 # Virtual environments
 venv/
-.env
-
-# Build artifacts
-dist/
-build/
