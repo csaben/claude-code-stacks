@@ -248,7 +248,7 @@ verify_installation() {
 
 # Main installation function
 main() {
-    print_header()
+    print_header
     print_status "Starting Claude Code Stacks installation..."
     
     detect_platform
@@ -276,4 +276,4 @@ main() {
 }
 
 # Run main function
-main "$@""
+main "$@"
