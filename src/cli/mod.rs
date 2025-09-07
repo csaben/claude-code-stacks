@@ -4,3 +4,4 @@ pub mod status;
 pub mod pull;
 pub mod worktree;
 pub mod sync;
+pub mod cleanup;

@@ -12,6 +12,36 @@ impl ClaudeMdUpdater {
         }
     }
 
+    /// Add an import statement for a stack to CLAUDE.md with demarcation line
+    pub async fn add_stack_import_with_demarcation(&self, stack_name: &str) -> Result<()> {
+        let import_line = format!("@stacks/{}/CLAUDE.md", stack_name);
+        
+        if self.claude_md_path.exists() {
+            let content = tokio::fs::read_to_string(&self.claude_md_path)
+                .await
+                .with_context(|| format!("Failed to read {}", self.claude_md_path.display()))?;
+            
+            // Check if the import already exists
+            if content.contains(&import_line) {
+                return Ok(()); // Already imported
+            }
+
+            let updated_content = self.insert_stack_import_with_demarcation(&content, &import_line);
+            
+            tokio::fs::write(&self.claude_md_path, updated_content)
+                .await
+                .with_context(|| format!("Failed to write {}", self.claude_md_path.display()))?;
+        } else {
+            // Create new CLAUDE.md with demarcation
+            let content = format!("# Project Instructions\n\n----\n\nSee {}.\n", import_line);
+            tokio::fs::write(&self.claude_md_path, content)
+                .await
+                .with_context(|| format!("Failed to create {}", self.claude_md_path.display()))?;
+        }
+        
+        Ok(())
+    }
+
     /// Add an import statement for a stack to CLAUDE.md
     pub async fn add_stack_import(&self, stack_name: &str) -> Result<()> {
         let import_line = format!("@stacks/{}/CLAUDE.md", stack_name);
@@ -130,6 +160,68 @@ impl ClaudeMdUpdater {
         println!("  📝 Removed import from CLAUDE.md: {}", import_line);
         Ok(())
     }
+
+    /// Insert stack import with demarcation line handling
+    pub fn insert_stack_import_with_demarcation(&self, content: &str, import_line: &str) -> String {
+        const DEMARCATION: &str = "----";
+        
+        // Check if demarcation line exists
+        if let Some(_demarcation_pos) = content.find(DEMARCATION) {
+            // Find the position after the demarcation line
+            let lines: Vec<&str> = content.lines().collect();
+            let mut result_lines = Vec::new();
+            
+            for line in &lines {
+                result_lines.push(line.to_string());
+                
+                if line.trim() == DEMARCATION {
+                    // Add empty line then the import
+                    result_lines.push("".to_string());
+                    result_lines.push(format!("See {}.", import_line));
+                }
+            }
+            
+            result_lines.join("\n")
+        } else {
+            // No demarcation line exists, add it with the import
+            format!("{}\n\n{}\n\nSee {}.\n", content.trim(), DEMARCATION, import_line)
+        }
+    }
+
+    /// Remove all imports below demarcation line (used in cleanup)
+    pub async fn cleanup_demarcated_imports(&self) -> Result<()> {
+        const DEMARCATION: &str = "----";
+        
+        if !self.claude_md_path.exists() {
+            return Ok(()); // Nothing to clean
+        }
+        
+        let content = tokio::fs::read_to_string(&self.claude_md_path)
+            .await
+            .with_context(|| format!("Failed to read {}", self.claude_md_path.display()))?;
+        
+        if let Some(_demarcation_pos) = content.find(DEMARCATION) {
+            let lines: Vec<&str> = content.lines().collect();
+            let mut result_lines = Vec::new();
+            
+            for line in &lines {
+                if line.trim() == DEMARCATION {
+                    result_lines.push(line.to_string());
+                    break; // Stop here, removing everything after demarcation
+                } else {
+                    result_lines.push(line.to_string());
+                }
+            }
+            
+            let cleaned_content = result_lines.join("\n");
+            
+            tokio::fs::write(&self.claude_md_path, cleaned_content)
+                .await
+                .with_context(|| format!("Failed to write cleaned {}", self.claude_md_path.display()))?;
+        }
+        
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -160,4 +252,57 @@ mod tests {
         assert!(result.contains("@stacks/testing/CLAUDE.md"));
         assert!(result.contains("@stacks/linting/CLAUDE.md"));
     }
+
+    #[tokio::test]
+    async fn test_demarcation_and_cleanup() {
+        use tempfile::tempdir;
+        use std::fs;
+        
+        // Create a temporary directory for testing
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let claude_md_path = temp_dir.path().join("CLAUDE.md");
+        
+        // Create a custom updater with the temp path
+        let updater = ClaudeMdUpdater {
+            claude_md_path: claude_md_path.clone(),
+        };
+        
+        // Initial content with some existing content above the demarcation
+        let initial_content = "# My Project\n\nThis is important project info.\n\n## Setup\n\nSome setup instructions.";
+        fs::write(&claude_md_path, initial_content).expect("Failed to write initial content");
+        
+        // Add first stack with demarcation
+        updater.add_stack_import_with_demarcation("ts-lint-stack").await.unwrap();
+        
+        let content_after_first = fs::read_to_string(&claude_md_path).unwrap();
+        assert!(content_after_first.contains("----"), "Demarcation line should be added");
+        assert!(content_after_first.contains("See @stacks/ts-lint-stack/CLAUDE.md"), "First stack import should be added");
+        assert!(content_after_first.contains("This is important project info"), "Original content should be preserved");
+        
+        // Add second stack with demarcation
+        updater.add_stack_import_with_demarcation("stack-2").await.unwrap();
+        
+        let content_after_second = fs::read_to_string(&claude_md_path).unwrap();
+        assert!(content_after_second.contains("See @stacks/ts-lint-stack/CLAUDE.md"), "First stack should still be there");
+        assert!(content_after_second.contains("See @stacks/stack-2/CLAUDE.md"), "Second stack should be added");
+        
+        // Count demarcation lines - should only be one
+        let demarcation_count = content_after_second.matches("----").count();
+        assert_eq!(demarcation_count, 1, "Should only have one demarcation line");
+        
+        // Now test cleanup
+        updater.cleanup_demarcated_imports().await.unwrap();
+        
+        let content_after_cleanup = fs::read_to_string(&claude_md_path).unwrap();
+        assert!(content_after_cleanup.contains("This is important project info"), "Original content should be preserved after cleanup");
+        assert!(content_after_cleanup.contains("----"), "Demarcation line should remain");
+        assert!(!content_after_cleanup.contains("@stacks/ts-lint-stack/CLAUDE.md"), "Stack imports should be removed");
+        assert!(!content_after_cleanup.contains("@stacks/stack-2/CLAUDE.md"), "Stack imports should be removed");
+        
+        // Content after demarcation should be gone
+        let lines: Vec<&str> = content_after_cleanup.lines().collect();
+        let demarcation_index = lines.iter().position(|&line| line.trim() == "----").unwrap();
+        assert_eq!(lines.len(), demarcation_index + 1, "Nothing should exist after demarcation line");
+    }
 }
+
