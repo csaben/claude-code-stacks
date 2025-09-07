@@ -109,8 +109,17 @@ async fn create_stack_worktree(tmux_session: &str) -> Result<bool> {
     let selected_stacks = select_stacks_with_skim().await?;
     
     if selected_stacks.is_empty() {
-        println!("No stacks selected, skipping worktree creation");
-        return Ok(false);
+        // Allow Claude to work without stacks in current directory
+        println!("No stacks selected - Claude will work in current directory without stack configuration");
+        
+        // Create worktree anyway but without stacks
+        let worktree_path = create_worktree_for_feature(&feature_name).await?;
+        
+        // Create new tmux pane and launch Claude with the prompt
+        create_tmux_pane_with_claude(tmux_session, &worktree_path, &claude_prompt).await?;
+        
+        println!("Created worktree '{}' with no stacks (vanilla Claude)", feature_name);
+        return Ok(true);
     }
 
     // Create worktree
@@ -139,15 +148,16 @@ async fn select_stacks_with_skim() -> Result<Vec<Stack>> {
         anyhow::bail!("No stacks found in remote repository");
     }
 
-    // Prepare items for skim
-    let items: Vec<String> = stacks.iter().map(|stack| {
+    // Prepare items for skim, with option to continue without stacks
+    let mut items: Vec<String> = vec!["[NONE] - Continue without any stacks (Claude will work in current directory)".to_string()];
+    items.extend(stacks.iter().map(|stack| {
         format!("{} - {}", stack.name, stack.description.as_ref().unwrap_or(&"No description".to_string()))
-    }).collect();
+    }));
     
     let options = SkimOptionsBuilder::default()
         .height(Some("50%"))
         .multi(true)
-        .prompt(Some("Select stacks: "))
+        .prompt(Some("Select stacks (Tab for multi-select, or choose [NONE] to work without stacks): "))
         .build()
         .unwrap();
 
@@ -166,6 +176,12 @@ async fn select_stacks_with_skim() -> Result<Vec<Stack>> {
                 let item_text = item_output.as_ref();
                 // Find the stack name (everything before the first " - ")
                 let stack_name = item_text.split(" - ").next()?;
+                
+                // Skip the "[NONE]" option
+                if stack_name == "[NONE]" {
+                    return None;
+                }
+                
                 stacks.iter().find(|s| s.name == stack_name).cloned()
             })
             .collect();
@@ -299,13 +315,14 @@ pub async fn run_with_stack(direct_stack: Option<String>) -> Result<()> {
             return Ok(());
         }
     } else {
-        println!("🎯 Select stacks to checkout (use Tab for multi-select):");
+        println!("🎯 Select stacks to checkout (use Tab for multi-select, or choose [NONE] to work without stacks):");
         let selected_stack_objects = select_stacks_with_skim().await?;
         selected_stack_objects.iter().map(|s| s.name.clone()).collect()
     };
     
     if selected_stacks.is_empty() {
-        println!("No stacks selected.");
+        println!("No stacks selected - Claude will work in the current directory without stack configuration.");
+        println!("💡 Claude Code is ready to use in this directory with default settings.");
         return Ok(());
     }
 
