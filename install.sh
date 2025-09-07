@@ -118,26 +118,50 @@ check_dependencies() {
 get_latest_release() {
     print_status "Fetching latest release information..."
     
+    # Try multiple approaches to get version
     local release_url="$GITHUB_API/releases/latest"
+    local all_releases_url="$GITHUB_API/releases"
     local release_info
     
-    if ! release_info=$(curl -s "$release_url"); then
-        print_warning "Failed to fetch release information from GitHub"
-        print_status "Will build from source instead"
-        return 1
+    # First try: get latest release
+    if release_info=$(curl -s "$release_url") && [ -n "$release_info" ]; then
+        # Extract tag name
+        LATEST_VERSION=$(echo "$release_info" | grep '"tag_name":' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
+        
+        if [ -n "$LATEST_VERSION" ]; then
+            print_status "Latest version: $LATEST_VERSION"
+            return 0
+        fi
     fi
     
-    # Extract tag name
-    LATEST_VERSION=$(echo "$release_info" | grep '"tag_name":' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
-    
-    if [ -z "$LATEST_VERSION" ]; then
-        print_warning "No releases found on GitHub"
-        print_status "Will build from source instead"
-        return 1
+    # Second try: get all releases and pick the first one
+    print_status "Latest release API failed, trying all releases..."
+    if release_info=$(curl -s "$all_releases_url") && [ -n "$release_info" ]; then
+        # Extract first tag name from releases array
+        LATEST_VERSION=$(echo "$release_info" | grep '"tag_name":' | head -1 | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
+        
+        if [ -n "$LATEST_VERSION" ]; then
+            print_status "Found version: $LATEST_VERSION"
+            return 0
+        fi
     fi
     
-    print_status "Latest version: $LATEST_VERSION"
-    return 0
+    # Third try: hardcoded known version as fallback
+    print_status "GitHub API failed, trying known version v1.0.0..."
+    LATEST_VERSION="v1.0.0"
+    
+    # Test if this version has assets by trying to download
+    local test_binary_filename="${BINARY_NAME}-${PLATFORM}-${ARCH}"
+    local test_download_url="https://github.com/$REPO/releases/download/$LATEST_VERSION/$test_binary_filename"
+    
+    if curl -s --head "$test_download_url" | grep -q "200 OK"; then
+        print_status "Confirmed version: $LATEST_VERSION"
+        return 0
+    fi
+    
+    print_warning "No accessible releases found on GitHub"
+    print_status "Will build from source instead"
+    return 1
 }
 
 # Download and install binary
