@@ -126,7 +126,8 @@ jobs:
         run: cargo clippy --all-targets --all-features -- -W clippy::all
 
       - name: Check formatting
-        run: cargo fmt -- --check || echo "Warning: Code formatting issues found but continuing build"
+        run: |
+          cargo fmt -- --check || echo "Warning: Code formatting issues found but continuing build"
 
   security:
     name: Security Audit
@@ -150,7 +151,8 @@ jobs:
         run: cargo install cargo-audit
 
       - name: Run security audit
-        run: cargo audit || echo "Warning: Security audit found issues but continuing build"
+        run: |
+          cargo audit || echo "Warning: Security audit found issues but continuing build"
 
   release:
     name: Create Release
