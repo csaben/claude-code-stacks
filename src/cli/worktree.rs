@@ -83,9 +83,17 @@ pub async fn run() -> Result<()> {
 
 async fn gather_worktree_config(current_branch: &str, repo_name: &str, app_config: &crate::config::StacksConfig) -> Result<WorktreeConfig> {
     // Get task name
-    let task_name: String = Input::new()
+    let raw_task_name: String = Input::new()
         .with_prompt("Task name")
         .interact_text()?;
+    
+    // Replace spaces with hyphens for safe usage in branch names, paths, and tmux sessions
+    let task_name = raw_task_name.replace(' ', "-");
+    
+    // Show transformation if spaces were replaced
+    if task_name != raw_task_name {
+        println!("📝 Task name normalized: '{}' → '{}'", raw_task_name, task_name);
+    }
 
     // Branch strategy selection
     let branch_strategies = vec![
