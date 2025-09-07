@@ -161,11 +161,31 @@ download_and_install() {
     fi
     
     # Download the binary
+    print_status "Downloading from: $download_url"
     if ! curl -L -o "$target_path" "$download_url"; then
         print_error "Failed to download binary from $download_url"
         
-        print_error "Pre-built binary not available"
-        exit 1
+        # Ask user if they want to build from source
+        if command -v cargo >/dev/null 2>&1; then
+            print_warning "Pre-built binary not available for your platform"
+            echo -n "Would you like to build from source instead? This may take a few minutes. [y/N]: "
+            read -r response
+            case "$response" in
+                [yY]|[yY][eE][sS])
+                    print_status "Building from source..."
+                    build_from_source
+                    return
+                    ;;
+                *)
+                    print_status "Installation cancelled by user"
+                    exit 1
+                    ;;
+            esac
+        else
+            print_error "Pre-built binary not available and Rust/Cargo not found"
+            print_status "Please install Rust: https://rustup.rs/"
+            exit 1
+        fi
     fi
     
     # Make executable
@@ -263,10 +283,21 @@ main() {
     if get_latest_release; then
         download_and_install
     else
-        # Fallback to building from source
+        # Ask user if they want to build from source when no releases available
         if command -v cargo >/dev/null 2>&1; then
-            print_status "Rust/Cargo detected, building from source..."
-            build_from_source
+            print_warning "No GitHub releases found"
+            echo -n "Would you like to build from source instead? This may take a few minutes. [y/N]: "
+            read -r response
+            case "$response" in
+                [yY]|[yY][eE][sS])
+                    print_status "Building from source..."
+                    build_from_source
+                    ;;
+                *)
+                    print_status "Installation cancelled by user"
+                    exit 1
+                    ;;
+            esac
         else
             print_error "No pre-built releases available and cargo not found"
             print_status "Please install Rust/Cargo: https://rustup.rs/"
