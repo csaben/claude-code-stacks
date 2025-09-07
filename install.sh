@@ -122,19 +122,22 @@ get_latest_release() {
     local release_info
     
     if ! release_info=$(curl -s "$release_url"); then
-        print_error "Failed to fetch release information from GitHub"
-        exit 1
+        print_warning "Failed to fetch release information from GitHub"
+        print_status "Will build from source instead"
+        return 1
     fi
     
     # Extract tag name
     LATEST_VERSION=$(echo "$release_info" | grep '"tag_name":' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
     
     if [ -z "$LATEST_VERSION" ]; then
-        print_error "Could not determine latest version"
-        exit 1
+        print_warning "No releases found on GitHub"
+        print_status "Will build from source instead"
+        return 1
     fi
     
     print_status "Latest version: $LATEST_VERSION"
+    return 0
 }
 
 # Download and install binary
@@ -161,13 +164,7 @@ download_and_install() {
     if ! curl -L -o "$target_path" "$download_url"; then
         print_error "Failed to download binary from $download_url"
         
-        # Fallback: try to build from source if cargo is available
-        if command -v cargo >/dev/null 2>&1; then
-            print_status "Attempting to build from source..."
-            build_from_source
-            return
-        fi
-        
+        print_error "Pre-built binary not available"
         exit 1
     fi
     
@@ -261,8 +258,22 @@ main() {
     fi
     
     check_dependencies
-    get_latest_release
-    download_and_install
+    
+    # Try to get latest release, fallback to source build if not available
+    if get_latest_release; then
+        download_and_install
+    else
+        # Fallback to building from source
+        if command -v cargo >/dev/null 2>&1; then
+            print_status "Rust/Cargo detected, building from source..."
+            build_from_source
+        else
+            print_error "No pre-built releases available and cargo not found"
+            print_status "Please install Rust/Cargo: https://rustup.rs/"
+            print_status "Or manually build from: https://github.com/$REPO"
+            exit 1
+        fi
+    fi
     update_path
     verify_installation
     
