@@ -5,6 +5,7 @@ use dialoguer::{Input, Select, Confirm};
 
 use crate::utils::dependency_check::check_dependencies;
 use crate::config::{load_config, TmuxStrategy, InTmuxBehavior};
+use crate::core::permission_generator::PermissionGenerator;
 
 #[derive(Debug, Clone)]
 pub struct WorktreeConfig {
@@ -289,6 +290,9 @@ async fn execute_worktree_creation(config: &WorktreeConfig, current_branch: &str
         let error = String::from_utf8_lossy(&output.stderr);
         anyhow::bail!("Failed to create worktree: {}", error);
     }
+
+    // Set up automatic permissions for the feature branch
+    setup_feature_permissions(config).await?;
 
     // Check if user is already in tmux
     let in_tmux = is_in_tmux()?;
@@ -862,4 +866,39 @@ fn branch_exists(branch_name: &str) -> bool {
         .output()
         .map(|output| output.status.success())
         .unwrap_or(false)
+}
+
+/// Set up automatic permissions that protect the main directory while allowing full access to the feature directory
+async fn setup_feature_permissions(config: &WorktreeConfig) -> Result<()> {
+    println!("🛡️ Setting up automatic permissions for feature branch...");
+    
+    // Get the current working directory (main project directory)
+    let current_dir = std::env::current_dir()
+        .context("Failed to get current working directory")?;
+    
+    // The feature directory is the worktree location
+    let feature_dir = config.location.clone();
+    
+    // Create permission generator
+    let permission_generator = PermissionGenerator::new(current_dir.clone(), feature_dir);
+    
+    // Apply permissions to the feature directory's .claude/settings.local.json
+    let feature_settings_path = config.location.join(".claude").join("settings.local.json");
+    
+    // Ensure the .claude directory exists in the feature directory
+    let claude_dir = config.location.join(".claude");
+    if !claude_dir.exists() {
+        tokio::fs::create_dir_all(&claude_dir).await
+            .with_context(|| format!("Failed to create .claude directory in {}", config.location.display()))?;
+    }
+    
+    permission_generator.apply_to_local_settings(&feature_settings_path).await
+        .context("Failed to apply feature permissions")?;
+    
+    println!("  ✅ Permissions configured:");
+    println!("    • Full access to: {}", config.location.display());
+    println!("    • Read-only access to: {}", current_dir.display());
+    println!("    • Settings saved to: {}", feature_settings_path.display());
+    
+    Ok(())
 }
